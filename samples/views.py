@@ -1,5 +1,5 @@
 from django.shortcuts import redirect, render
-from django.db import Sample
+from .models import Sample
 from .tasks import denoise_sample
 
 # samples/views.py
