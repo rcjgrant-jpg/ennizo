@@ -1,0 +1,150 @@
+from django.db import models
+
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.db.models import Q
+
+PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+class DerivedMetadata(models.Model):
+    class Mode(models.TextChoices):
+        MAJOR = "major", "Major"
+        MINOR = "minor", "Minor"
+
+    sample = models.OneToOneField(
+        "library.Sample", on_delete=models.CASCADE, related_name="metadata"
+    )
+
+    # --- pipeline output: never user-writable ---
+    bpm = models.FloatField(null=True, blank=True)
+    bpm_confidence = models.FloatField(
+        null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(1)],
+    )
+
+    tonic = models.SmallIntegerField(
+        null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(11)],
+    )
+    mode = models.CharField(max_length=10, choices=Mode.choices, blank=True)
+    key_confidence = models.FloatField(
+        null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(1)],
+    )
+
+    instrument = models.CharField(max_length=50, blank=True)
+    quality_flags = models.JSONField(default=dict, blank=True)
+
+    analysed_at = models.DateTimeField(null=True, blank=True)
+    pipeline_version = models.CharField(max_length=20, blank=True)
+
+    # --- user corrections: kept separate so pipeline output survives ---
+    bpm_override = models.FloatField(null=True, blank=True)
+    tonic_override = models.SmallIntegerField(
+        null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(11)],
+    )
+    mode_override = models.CharField(max_length=10, choices=Mode.choices, blank=True)
+    corrected_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "derived metadata"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(tonic__isnull=True) | Q(tonic__range=(0, 11)),
+                name="tonic_in_pitch_class_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(tonic_override__isnull=True)
+                | Q(tonic_override__range=(0, 11)),
+                name="tonic_override_in_pitch_class_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(bpm__isnull=True) | Q(bpm__gt=0),
+                name="bpm_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(bpm_override__isnull=True) | Q(bpm_override__gt=0),
+                name="bpm_override_positive",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["bpm"]),
+            models.Index(fields=["tonic", "mode"]),
+            models.Index(fields=["analysed_at"]),
+        ]
+
+    def __str__(self):
+        return f"Metadata for sample {self.sample_id}"
+
+    # --- effective values ---
+
+    @property
+    def effective_bpm(self):
+        return self.bpm_override if self.bpm_override is not None else self.bpm
+
+    @property
+    def effective_tonic(self):
+        return self.tonic_override if self.tonic_override is not None else self.tonic
+
+    @property
+    def effective_mode(self):
+        return self.mode_override or self.mode
+
+    # --- state ---
+
+    @property
+    def is_analysed(self):
+        return self.analysed_at is not None
+
+    @property
+    def is_pitched(self):
+        return self.is_analysed and self.effective_tonic is not None
+
+    @property
+    def has_tempo(self):
+        return self.is_analysed and self.effective_bpm is not None
+
+    @property
+    def is_corrected(self):
+        return (
+            self.bpm_override is not None
+            or self.tonic_override is not None
+            or bool(self.mode_override)
+        )
+
+    # --- display ---
+
+    @property
+    def key_display(self):
+        if not self.is_pitched:
+            return ""
+        name = PITCH_CLASSES[self.effective_tonic]
+        return f"{name} {self.effective_mode}" if self.effective_mode else name
+
+    @property
+    def bpm_display(self):
+        return f"{self.effective_bpm:.1f}" if self.has_tempo else ""
+
+    # --- audition helpers ---
+
+    def transpose_to(self, target_tonic):
+        """Semitone offset to target, constrained to -6..+5 (U3.4)."""
+        if not self.is_pitched:
+            return None
+        return ((target_tonic - self.effective_tonic + 6) % 12) - 6
+
+    def stretch_ratio_to(self, target_bpm):
+        """Playback rate multiplier for project-tempo audition (U3.3)."""
+        if not self.has_tempo or not target_bpm:
+            return None
+        return target_bpm / self.effective_bpm
+
+    def compatible_keys(self):
+        """Relative major/minor, dominant, subdominant — as (tonic, mode)."""
+        if not self.is_pitched:
+            return []
+        t, m = self.effective_tonic, self.effective_mode
+        relative = ((t + 9) % 12, "minor") if m == "major" else ((t + 3) % 12, "major")
+        return [relative, ((t + 7) % 12, m), ((t + 5) % 12, m)]
