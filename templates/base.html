@@ -1,5 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
+{# AI used to assist in overall structure of navigation bar with specific items self coded #}
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8">
@@ -49,7 +50,7 @@
           Feed
         </a>
 
-        <a href="#"
+        <a href="{% url 'library:index' %}"
            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
                   {% if active_page == 'library' %}bg-primary/15 text-primary{% else %}text-muted-foreground hover:text-foreground hover:bg-white/[0.04]{% endif %}">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" 
@@ -57,7 +58,7 @@
           Library
         </a>
 
-        <a href="#"
+        <a href="{% url 'accounts:profile' request.user.username %}"
            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
                   {% if active_page == 'profile' %}bg-primary/15 text-primary{% else %}text-muted-foreground hover:text-foreground hover:bg-white/[0.04]{% endif %}">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" 

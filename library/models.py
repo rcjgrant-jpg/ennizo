@@ -106,7 +106,7 @@ class Tag(models.Model):
         OBJECTIVE = "objective", "Objective"
         SUBJECTIVE = "subjective", "Subjective"
         
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     kind = models.CharField(max_length=20, choices=Kind.choices)
     
 class TagSource(models.TextChoices):

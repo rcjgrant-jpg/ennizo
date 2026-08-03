@@ -1,0 +1,23 @@
+{% extends "base_app.html" %}
+
+{% block content %}
+  <header class="mb-8">
+    <h1 class="text-2xl font-semibold">{{ profile_user.username }}</h1>
+
+    {% if is_own_profile %}
+      <a href="{% url 'accounts:settings' %}">Edit profile</a>
+    {% endif %}
+  </header>
+
+  {% for sample in samples %}
+    <article>{{ sample.title }}</article>
+  {% empty %}
+    <p class="text-muted-foreground">
+      {% if is_own_profile %}
+        You haven't shared any samples yet.
+      {% else %}
+        {{ profile_user.username }} hasn't shared any samples yet.
+      {% endif %}
+    </p>
+  {% endfor %}
+{% endblock %}
