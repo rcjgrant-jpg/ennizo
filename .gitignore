@@ -6,3 +6,5 @@ db.sqlite3
 .DS_Store
 /media/
 /staticfiles/
+node_modules/
+static/css/site.css

@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+@source '../../templates/**/*.html';
+
+@import 'tw-animate-css';
+
+@import './theme.css';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
