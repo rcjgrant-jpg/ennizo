@@ -108,6 +108,12 @@ class Tag(models.Model):
         
     name = models.CharField(max_length=100, unique=True)
     kind = models.CharField(max_length=20, choices=Kind.choices)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
     
 class TagSource(models.TextChoices):
     DERIVED = "derived", "Derived"
@@ -121,6 +127,16 @@ class SampleTag(models.Model):
     tag = models.ForeignKey("Tag", on_delete=models.CASCADE)
     source = models.CharField(max_length=20, choices=TagSource.choices)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sample", "tag"], name="unique_tag_per_sample"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.sample_id} → {self.tag_id}"
 
 class Sample(models.Model):
     folder = models.ForeignKey(
@@ -153,6 +169,4 @@ class Sample(models.Model):
         if meta is None or meta.analysed_at is None:
             return None
         return meta.bpm_override if meta.bpm_override is not None else meta.bpm
-        
-
             

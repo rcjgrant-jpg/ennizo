@@ -1,7 +1,7 @@
-from django.shortcuts import redirect, render
-from .models import Sample
-from .tasks import denoise_sample
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+
+from .models import Sample
 
 
 @login_required
@@ -17,13 +17,12 @@ def index(request):
         "active_page": "library",
     })
 
-def upload_sample(request):
-    sample = Sample.objects.create(
-        title=request.POST["title"],
-        owner=request.user,
-        audio_file=request.FILES["audio"],   # file → storage (S3/local)
-    )
-    denoise_sample.delay(sample.id)           # job → Redis → a worker later
-    return redirect("sample_detail", sample.id)
+
+@login_required
+def record(request):
+    return render(request, "library/record.html", {
+        "active_page": "record",
+    })
+
 
 

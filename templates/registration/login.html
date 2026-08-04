@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in — Ennizo{% endblock %}
+
+{% block body_class %}h-screen bg-background text-foreground flex items-center justify-center{% endblock %}
+
+{% block body %}
+<div class="w-80">
+  <h1 class="text-xl font-semibold mb-6">Sign in to Ennizo</h1>
+
+  <form method="post" class="flex flex-col gap-3">
+    {% csrf_token %}
+    {{ form.as_div }}
+    <button type="submit"
+            class="py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-xl transition-colors">
+      Sign in
+    </button>
+  </form>
+
+  {% if form.errors %}
+    <p class="text-sm text-red-400 mt-3">Incorrect username or password.</p>
+  {% endif %}
+</div>
+
+<p class="text-xs text-muted-foreground mt-4">
+  No account?
+  <a href="{% url 'accounts:register' %}" class="text-primary hover:underline">Create one</a>
+</p>
+
+{% endblock %}
