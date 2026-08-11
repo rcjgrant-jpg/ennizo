@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-{# AI used to assist in overall structure of navigation bar with specific items self coded #}
+
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8">
@@ -9,10 +9,52 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <link rel="stylesheet" href="{% static 'css/site.css' %}">
   </head>
 
-  <body class="{% block body_class %}bg-background text-foreground{% endblock %}">
+  <audio id="global-player" preload="none"></audio>
+
+  
+<script>
+  (function () {
+    const player = document.getElementById("global-player");
+    let currentButton = null;
+
+    function resetButton(btn) {
+      if (btn) btn.textContent = "\u25B6";
+    }
+
+    document.addEventListener("click", function (e) {
+      const btn = e.target.closest("[data-audio-src]");
+      if (!btn) return;
+
+      const src = btn.getAttribute("data-audio-src");
+
+      if (currentButton === btn && !player.paused) {
+        player.pause();
+        resetButton(btn);
+        return;
+      }
+
+      resetButton(currentButton);
+
+      if (player.src !== src) {
+        player.src = src;
+      }
+      player.play();
+      btn.textContent = "\u23F8";
+      currentButton = btn;
+    });
+
+    player.addEventListener("ended", function () {
+      resetButton(currentButton);
+      currentButton = null;
+    });
+  })();
+</script>
+
+  <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="{% block body_class %}bg-background text-foreground{% endblock %}">
     {% block body %}{% endblock %}
   </body>
 </html>
