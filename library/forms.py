@@ -1,10 +1,9 @@
 # library/forms.py
-# library/forms.py
 from pathlib import Path
 
 from django import forms
 
-from .models import Sample, Tag, SampleTag
+from .models import Folder, Sample
 
 
 class SampleUploadForm(forms.ModelForm):
@@ -13,14 +12,26 @@ class SampleUploadForm(forms.ModelForm):
         help_text="Comma-separated, e.g. drums, breakbeat, lo-fi",
         widget=forms.TextInput(attrs={"placeholder": "drums, breakbeat, lo-fi"}),
     )
+    folder = forms.ModelChoiceField(
+        queryset=Folder.objects.none(),
+        required=True,
+        empty_label=None,
+    )
 
     class Meta:
         model = Sample
         fields = ["title", "audio_file", "note", "is_public"]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["title"].required = False
+        self.fields["folder"].queryset = Folder.objects.filter(
+            library__user=user
+        ).order_by("name")
+
+        unsorted = self.fields["folder"].queryset.filter(name="Unsorted").first()
+        if unsorted and not self.is_bound:
+            self.fields["folder"].initial = unsorted.pk
 
     def clean_audio_file(self):
         f = self.cleaned_data["audio_file"]
@@ -48,3 +59,30 @@ class SampleUploadForm(forms.ModelForm):
         if len(names) > 10:
             raise forms.ValidationError("Ten tags maximum.")
         return names
+
+
+class FolderForm(forms.ModelForm):
+    class Meta:
+        model = Folder
+        fields = ["name"]
+        widgets = {
+            "name": forms.TextInput(attrs={
+                "placeholder": "Folder name",
+                "class": "bg-muted border-border w-full rounded-md border px-3 py-2 text-sm",
+            }),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if not name:
+            raise forms.ValidationError("Give the folder a name.")
+        exists = Folder.objects.filter(
+            library__user=self.user, name__iexact=name
+        ).exists()
+        if exists:
+            raise forms.ValidationError("You already have a folder with that name.")
+        return name
