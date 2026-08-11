@@ -7,4 +7,5 @@ app_name = "library"
 urlpatterns = [
     path("", views.index, name="index"),
     path("record/", views.record, name="record"),
+    path("upload/", views.upload, name="upload"),
 ]

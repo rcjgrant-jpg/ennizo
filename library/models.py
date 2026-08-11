@@ -9,6 +9,7 @@ from django.db.models import Q
 
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db import models
+from django.core.validators import FileExtensionValidator
 
 
 def sample_upload_path(instance, filename):
@@ -143,7 +144,10 @@ class Sample(models.Model):
         Folder, on_delete=models.PROTECT, related_name="samples"
     )
     title = models.CharField(max_length=255)
-    audio_file = models.FileField(upload_to=sample_upload_path)
+    audio_file = models.FileField(
+        upload_to=sample_upload_path,
+        validators=[FileExtensionValidator(allowed_extensions=["wav", "mp3", "aiff", "flac"])],
+    )
     is_public = models.BooleanField(default=False)          # U2.7
     note = models.TextField(blank=True)                     # U2.6
     created_at = models.DateTimeField(auto_now_add=True)

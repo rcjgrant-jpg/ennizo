@@ -1,0 +1,45 @@
+<article class="bg-card border-border rounded-xl border p-4">
+
+  <header class="flex items-center gap-3">
+    <div class="bg-muted h-9 w-9 shrink-0 rounded-full"></div>
+    <div class="min-w-0">
+      <p class="truncate text-sm font-medium">{{ post.author.username }}</p>
+      <p class="text-muted-foreground text-xs">{{ post.created_at|timesince }} ago</p>
+    </div>
+  </header>
+
+  <p class="mt-3 text-sm">{{ post.body }}</p>
+
+  <div class="bg-muted mt-3 flex items-center gap-3 rounded-lg p-3">
+    <button type="button"
+            class="bg-primary text-primary-foreground grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs">
+      &#9654;
+    </button>
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm font-medium">{{ post.sample.title }}</p>
+      <p class="text-muted-foreground text-xs">
+        {% if post.sample.metadata.bpm %}{{ post.sample.metadata.bpm }} BPM{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if post.sample.tags.all %}
+    <div class="mt-2 flex flex-wrap gap-1.5">
+      {% for tag in post.sample.tags.all %}
+        <span class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">
+          {{ tag.name }}
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <footer class="text-muted-foreground mt-3 flex items-center gap-4 text-sm">
+    <button type="button" class="hover:text-foreground">
+      {% if post.liked_by_user %}&#9829;{% else %}&#9825;{% endif %} {{ post.like_count }}
+    </button>
+    <button type="button" class="hover:text-foreground">
+      {{ post.comment_count }} comments
+    </button>
+  </footer>
+
+</article>

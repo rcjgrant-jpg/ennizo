@@ -1,0 +1,80 @@
+{% extends "base_app.html" %}
+
+{% block content %}
+<div class="mx-auto w-full max-w-xl px-4 py-8">
+
+  <h1 class="mb-6 text-xl font-semibold">Upload a sample</h1>
+
+  <form method="post" enctype="multipart/form-data"
+        class="bg-card border-border space-y-5 rounded-xl border p-6">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="text-destructive text-sm">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div>
+      <label for="{{ form.audio_file.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+        Audio file
+      </label>
+      <input type="file" name="audio_file" id="{{ form.audio_file.id_for_label }}"
+             accept=".wav,.mp3,.aiff,.flac" required
+             class="text-muted-foreground file:bg-muted file:text-foreground w-full text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm">
+      {% for error in form.audio_file.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+      <p class="text-muted-foreground mt-1 text-xs">WAV, MP3, AIFF or FLAC. 100MB maximum.</p>
+    </div>
+
+    <div>
+      <label for="{{ form.title.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+        Title
+      </label>
+      <input type="text" name="title" id="{{ form.title.id_for_label }}"
+             value="{{ form.title.value|default:'' }}"
+             placeholder="Leave blank to use the filename"
+             class="bg-muted border-border w-full rounded-md border px-3 py-2 text-sm">
+      {% for error in form.title.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      <label for="{{ form.tags.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+        Tags
+      </label>
+      <input type="text" name="tags" id="{{ form.tags.id_for_label }}"
+             value="{{ form.tags.value|default:'' }}"
+             placeholder="drums, breakbeat, lo-fi"
+             class="bg-muted border-border w-full rounded-md border px-3 py-2 text-sm">
+      {% for error in form.tags.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+      <p class="text-muted-foreground mt-1 text-xs">Separate with commas. Ten maximum.</p>
+    </div>
+
+    <div>
+      <label for="{{ form.note.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+        Note <span class="text-muted-foreground font-normal">(optional)</span>
+      </label>
+      <textarea name="note" id="{{ form.note.id_for_label }}" rows="3"
+                class="bg-muted border-border w-full resize-none rounded-md border px-3 py-2 text-sm">{{ form.note.value|default:'' }}</textarea>
+    </div>
+
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="is_public" class="accent-primary"
+             {% if form.is_public.value %}checked{% endif %}>
+      Make this sample public
+    </label>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-primary text-primary-foreground rounded-md px-5 py-2 text-sm font-semibold">
+        Upload
+      </button>
+      <a href="{% url 'library:index' %}" class="text-muted-foreground text-sm">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

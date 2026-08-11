@@ -8,8 +8,8 @@ class ProcessedVariant(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["sample"],           # ← which field(s)?
-                condition=Q(is_current=True),       # ← the "only these rows" filter
+                fields=["sample"],           
+                condition=Q(is_current=True),       
                 name="unique_current_variant_per_sample",
             )
         ]
