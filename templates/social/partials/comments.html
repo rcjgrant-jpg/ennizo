@@ -1,0 +1,65 @@
+<div class="border-border mt-3 space-y-3 border-t pt-3">
+
+  <form hx-post="{% url 'social:add_comment' post.pk %}"
+        hx-target="#comments-{{ post.pk }}"
+        hx-swap="innerHTML"
+        class="flex items-center gap-2">
+    {% csrf_token %}
+    {{ comment_form.body }}
+    <button type="submit"
+            class="bg-primary text-primary-foreground shrink-0 rounded-md px-3 py-1.5 text-xs font-medium">
+      Send
+    </button>
+  </form>
+
+  {% for error in comment_form.body.errors %}
+    <p class="text-destructive text-xs">{{ error }}</p>
+  {% endfor %}
+
+  {% for comment in comments %}
+    <div class="text-sm">
+      <p>
+        <span class="font-medium">{{ comment.author }}</span>
+        <span class="text-muted-foreground ml-1 text-xs">{{ comment.created_at|timesince }} ago</span>
+      </p>
+      <p class="text-muted-foreground">{{ comment.body }}</p>
+
+      <details class="mt-1">
+        <summary class="text-muted-foreground cursor-pointer text-xs select-none">Reply</summary>
+        <form hx-post="{% url 'social:add_comment' post.pk %}"
+              hx-target="#comments-{{ post.pk }}"
+              hx-swap="innerHTML"
+              class="mt-2 flex items-center gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="parent" value="{{ comment.pk }}">
+          <input type="text" name="body" maxlength="200" required
+                 placeholder="Reply to {{ comment.author }}…"
+                 class="bg-muted border-border flex-1 rounded-md border px-3 py-1.5 text-xs outline-none">
+          <button type="submit"
+                  class="bg-muted shrink-0 rounded-md px-3 py-1.5 text-xs">Reply</button>
+        </form>
+      </details>
+
+      {% for reply in comment.replies.all %}
+        <div class="border-border mt-2 ml-3 border-l pl-3">
+          <p>
+            <span class="text-sm font-medium">{{ reply.author }}</span>
+            <span class="text-muted-foreground ml-1 text-xs">{{ reply.created_at|timesince }} ago</span>
+          </p>
+          <p class="text-muted-foreground text-sm">{{ reply.body }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  {% empty %}
+    <p class="text-muted-foreground text-xs">No comments yet.</p>
+  {% endfor %}
+
+  <button type="button"
+          onclick="this.closest('[data-comments]').innerHTML = '';"
+          class="text-muted-foreground text-xs underline">
+    Hide comments
+  </button>
+
+</div>
+
+{% include "social/partials/comment_button.html" with oob=True %}

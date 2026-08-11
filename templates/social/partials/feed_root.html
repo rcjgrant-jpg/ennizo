@@ -1,0 +1,69 @@
+<div id="feed-root">
+
+  <div class="bg-card border-border mb-4 rounded-xl border p-3">
+
+    <div class="relative">
+      <input type="search" name="q"
+             autocomplete="off"
+             placeholder="Search tags…"
+             hx-get="{% url 'social:tag_suggest' %}"
+             hx-trigger="input changed delay:250ms"
+             hx-target="#tag-suggestions"
+             hx-swap="innerHTML"
+             hx-include="#active-tag-inputs"
+             onblur="setTimeout(function () { document.getElementById('tag-suggestions').innerHTML = ''; }, 150)"
+             class="bg-muted border-border w-full rounded-md border px-3 py-2 text-sm outline-none">
+
+      <div id="tag-suggestions"
+           class="absolute left-0 right-0 top-full z-20 mt-1"></div>
+    </div>
+
+    <span id="active-tag-inputs" class="hidden">
+      {% for tag in selected_tags %}
+        <input type="hidden" name="tag" value="{{ tag.name }}">
+      {% endfor %}
+    </span>
+
+    {% if selected_tags %}
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        {% for tag in selected_tags %}
+          <a href="{{ tag.remove_url }}"
+             hx-get="{{ tag.remove_url }}"
+             hx-target="#feed-root"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="bg-primary text-primary-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium">
+            #{{ tag.name }}
+            <span aria-hidden="true">&times;</span>
+            <span class="sr-only">Remove filter</span>
+          </a>
+        {% endfor %}
+
+        <a href="{{ clear_url }}"
+           hx-get="{{ clear_url }}"
+           hx-target="#feed-root"
+           hx-swap="outerHTML"
+           hx-push-url="true"
+           class="text-muted-foreground text-xs underline">Clear all</a>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <div class="space-y-4">
+    {% for post in posts %}
+      {% include "social/partials/post_card.html" %}
+    {% empty %}
+      {% if selected_tags %}
+        <p class="text-muted-foreground py-12 text-center text-sm">
+          No posts match those tags.
+        </p>
+      {% else %}
+        <p class="text-muted-foreground py-12 text-center text-sm">
+          Nothing here yet. Be the first to post a sample.
+        </p>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+</div>
