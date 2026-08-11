@@ -1,0 +1,78 @@
+<h2 class="mb-3 text-sm font-semibold">{{ folder.name }}</h2>
+
+{% if messages %}
+  {% for message in messages %}
+    <p class="text-muted-foreground mb-3 text-xs">{{ message }}</p>
+  {% endfor %}
+{% endif %}
+
+<div class="space-y-2">
+  {% for sample in samples %}
+    <div class="bg-card border-border flex items-center gap-3 rounded-lg border p-3">
+
+      <button type="button"
+              data-audio-src="{{ sample.audio_file.url }}"
+              class="bg-primary text-primary-foreground grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs">
+        &#9654;
+      </button>
+
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium">{{ sample.title }}</p>
+        <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+          {% if sample.derived_bpm %}<span>{{ sample.derived_bpm }} BPM</span>{% endif %}
+          {% for tag in sample.tags.all %}
+            <span class="bg-muted rounded-full px-2 py-0.5">{{ tag.name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if not sample.is_public %}
+        <span class="text-muted-foreground shrink-0 text-xs">Private</span>
+      {% endif %}
+
+      <details class="relative shrink-0">
+        <summary class="text-muted-foreground hover:text-foreground grid h-8 w-8 cursor-pointer list-none place-items-center rounded-md">
+          &#8943;
+        </summary>
+        <div class="bg-card border-border absolute right-0 z-10 mt-1 w-56 rounded-lg border p-3 shadow-lg">
+
+          <form hx-post="{% url 'library:move_sample' sample.pk %}"
+                hx-target="#folder-contents"
+                hx-swap="innerHTML"
+                class="space-y-2">
+            {% csrf_token %}
+            <label class="text-muted-foreground block text-xs">Move to folder</label>
+            <select name="folder"
+                    class="bg-muted border-border w-full rounded-md border px-2 py-1 text-xs">
+              {% for f in folders %}
+                <option value="{{ f.pk }}" {% if f.pk == folder.pk %}selected{% endif %}>
+                  {{ f.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <button type="submit"
+                    class="bg-muted w-full rounded-md px-2 py-1 text-xs font-medium">
+              Move
+            </button>
+          </form>
+
+          <form hx-post="{% url 'library:delete_sample' sample.pk %}"
+                hx-target="#folder-contents"
+                hx-swap="innerHTML"
+                hx-confirm="Delete “{{ sample.title }}”? This cannot be undone."
+                class="border-border mt-3 border-t pt-3">
+            {% csrf_token %}
+            <button type="submit"
+                    class="text-destructive w-full rounded-md px-2 py-1 text-left text-xs font-medium">
+              Delete sample
+            </button>
+          </form>
+
+        </div>
+      </details>
+
+    </div>
+  {% empty %}
+    <p class="text-muted-foreground py-4 text-sm">This folder is empty.</p>
+  {% endfor %}
+</div>

@@ -54,6 +54,16 @@
     </div>
 
     <div>
+      <label for="{{ form.folder.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+        Folder
+      </label>
+      {{ form.folder }}
+      {% for error in form.folder.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
       <label for="{{ form.note.id_for_label }}" class="mb-1.5 block text-sm font-medium">
         Note <span class="text-muted-foreground font-normal">(optional)</span>
       </label>

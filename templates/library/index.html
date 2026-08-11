@@ -1,35 +1,57 @@
 {% extends "base_app.html" %}
 
-{% block title %}Library — Ennizo{% endblock %}
-
 {% block content %}
-<div class="px-8 py-8">
-  <h1 class="text-2xl font-semibold mb-6">Library</h1>
+<div class="mx-auto w-full max-w-4xl px-4 py-6">
 
-  <a href="{% url 'library:upload' %}"
-   class="bg-primary text-primary-foreground rounded-md px-4 py-2 text-sm font-semibold">
-  Upload
-  </a>
+  <div class="mb-6 flex items-center justify-between">
+    <h1 class="text-xl font-semibold">Library</h1>
+    <a href="{% url 'library:upload' %}"
+       class="bg-primary text-primary-foreground rounded-md px-4 py-2 text-sm font-semibold">
+      Upload
+    </a>
+  </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-    {% for sample in samples %}
-      <article class="border border-border rounded-xl p-4 hover:border-white/15 transition-colors">
-        <h2 class="text-sm font-semibold truncate">{{ sample.title }}</h2>
-        <p class="text-xs text-muted-foreground font-mono mt-1">
-          {{ sample.metadata.bpm_display|default:"—" }} BPM ·
-          {{ sample.metadata.key_display|default:"—" }} ·
-          {{ sample.folder.name }}
-        </p>
-        <div class="flex flex-wrap gap-1 mt-3">
-          {% for tag in sample.tags.all %}
-            <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-muted-foreground">{{ tag.name }}</span>
-          {% endfor %}
-        </div>
-        <audio controls preload="none" class="w-full mt-3 h-8" src="{{ sample.audio_file.url }}"></audio>
-      </article>
+  {% if messages %}
+    {% for message in messages %}
+      <p class="text-muted-foreground mb-4 text-sm">{{ message }}</p>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" action="{% url 'library:create_folder' %}"
+        class="mb-6 flex items-center gap-2">
+    {% csrf_token %}
+    {{ folder_form.name }}
+    <button type="submit"
+            class="bg-muted shrink-0 rounded-md px-4 py-2 text-sm font-medium">
+      Add folder
+    </button>
+  </form>
+
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+    {% for folder in folders %}
+      <button type="button"
+              hx-get="{% url 'library:folder_samples' folder.pk %}"
+              hx-target="#folder-contents"
+              hx-swap="innerHTML"
+              class="bg-card border-border hover:border-primary flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round" class="text-primary">
+          <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+        </svg>
+        <span class="w-full truncate text-center text-sm font-medium">{{ folder.name }}</span>
+        <span class="text-muted-foreground text-xs">
+          {{ folder.sample_count }} sample{{ folder.sample_count|pluralize }}
+        </span>
+      </button>
     {% empty %}
-      <p class="text-muted-foreground text-sm">No samples yet. Upload or record one to get started.</p>
+      <p class="text-muted-foreground col-span-full py-8 text-center text-sm">
+        No folders yet.
+      </p>
     {% endfor %}
   </div>
+
+  <div id="folder-contents" class="mt-8"></div>
+
 </div>
 {% endblock %}
