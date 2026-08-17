@@ -1,0 +1,161 @@
+{# AI used to assist in the creation of this file #}
+<div id="analysis-state"
+     {% if metadata.is_running %}
+       hx-get="{% url 'analysis:sample_analysis_state' sample.pk %}"
+       hx-trigger="every 2s"
+       hx-swap="outerHTML"
+     {% endif %}>
+
+{% if not metadata %}
+
+  <div class="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+    No analysis record exists for this sample.
+  </div>
+
+{% elif metadata.is_running %}
+
+  <div class="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+    <div class="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white/70"></div>
+    <p class="mt-4 text-sm text-white/70">Analysing audio…</p>
+    <p class="mt-1 text-xs text-white/40">Tempo, key and waveform. This usually takes a few seconds.</p>
+  </div>
+
+{% elif metadata.has_failed %}
+
+  <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
+    <h2 class="text-sm font-medium text-red-300">Analysis failed</h2>
+    <p class="mt-2 break-words font-mono text-xs text-red-200/70">{{ metadata.error_message }}</p>
+    {% if is_owner %}
+      <form method="post"
+            action="{% url 'analysis:retry_analysis' sample.pk %}"
+            hx-post="{% url 'analysis:retry_analysis' sample.pk %}"
+            hx-target="#analysis-state"
+            hx-swap="outerHTML"
+            class="mt-4">
+        {% csrf_token %}
+        <button type="submit"
+                class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">
+          Try again
+        </button>
+      </form>
+    {% endif %}
+  </div>
+
+{% else %}
+
+  {{ metadata.peaks|json_script:"peaks-data" }}
+
+  <div class="rounded-xl border border-white/10 bg-white/5 p-5">
+    <div id="waveform" data-audio="{{ sample.audio_file.url }}"></div>
+    <div class="mt-4 flex items-center gap-4">
+      <button id="wave-play" type="button"
+              class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Play</button>
+      <span class="text-sm text-white/50">{{ metadata.duration_display }}</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const container = document.getElementById("waveform");
+      const peaksEl = document.getElementById("peaks-data");
+      if (!container || !peaksEl || !window.WaveSurfer) return;
+
+      if (window.ennizoWave) { window.ennizoWave.destroy(); }
+
+      window.ennizoWave = WaveSurfer.create({
+        container: container,
+        url: container.dataset.audio,
+        peaks: [JSON.parse(peaksEl.textContent)],
+        duration: {{ metadata.duration_seconds|default:0 }},
+        height: 96,
+        waveColor: "rgba(255,255,255,0.35)",
+        progressColor: "#8b5cf6",
+        cursorColor: "rgba(255,255,255,0.6)",
+        barWidth: 2,
+        barGap: 1,
+        barRadius: 2,
+      });
+
+      const button = document.getElementById("wave-play");
+      if (button) {
+        button.addEventListener("click", () => window.ennizoWave.playPause());
+        window.ennizoWave.on("play", () => button.textContent = "Pause");
+        window.ennizoWave.on("pause", () => button.textContent = "Play");
+      }
+    })();
+  </script>
+
+  <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p class="text-xs uppercase tracking-wide text-white/40">Tempo</p>
+      <p class="mt-1 text-lg font-medium">{{ metadata.bpm_display|default:"—" }}{% if metadata.has_tempo %} <span class="text-sm text-white/40">BPM</span>{% endif %}</p>
+      {% if metadata.bpm_confidence %}
+        <p class="mt-1 text-xs text-white/40">{% widthratio metadata.bpm_confidence 1 100 %}% confidence</p>
+      {% endif %}
+    </div>
+
+    <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p class="text-xs uppercase tracking-wide text-white/40">Key</p>
+      <p class="mt-1 text-lg font-medium">{{ metadata.key_display|default:"—" }}</p>
+      {% if metadata.key_confidence %}
+        <p class="mt-1 text-xs text-white/40">{% widthratio metadata.key_confidence 1 100 %}% confidence</p>
+      {% endif %}
+    </div>
+
+    <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p class="text-xs uppercase tracking-wide text-white/40">Sample rate</p>
+      <p class="mt-1 text-lg font-medium">{{ metadata.sample_rate|default:"—" }}</p>
+      <p class="mt-1 text-xs text-white/40">Hz</p>
+    </div>
+
+    <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p class="text-xs uppercase tracking-wide text-white/40">Channels</p>
+      <p class="mt-1 text-lg font-medium">
+        {% if metadata.channels == 1 %}Mono{% elif metadata.channels == 2 %}Stereo{% else %}{{ metadata.channels|default:"—" }}{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if metadata.quality_warnings %}
+    <div class="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
+      <p class="text-xs uppercase tracking-wide text-amber-400/70">Quality notes</p>
+      <ul class="mt-2 space-y-1 text-sm text-amber-100/80">
+        {% for warning in metadata.quality_warnings %}
+          <li>{{ warning }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div class="mt-4 rounded-xl border border-white/10 bg-white/5 p-5">
+    <p class="text-xs uppercase tracking-wide text-white/40">Tags</p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      {% for sample_tag in sample.accepted_tags %}
+        <span class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm">
+          {{ sample_tag.tag.name }}
+          {% if sample_tag.is_machine_generated %}
+            <span class="ml-1 text-xs text-white/40" title="Derived from analysis">auto</span>
+          {% endif %}
+        </span>
+      {% empty %}
+        <p class="text-sm text-white/40">No tags yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if is_owner and post and not post.is_published and not in_composer %}
+    <form method="post" action="{% url 'analysis:publish_post' sample.pk %}" class="mt-6">
+      {% csrf_token %}
+      <button type="submit"
+              class="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium hover:bg-violet-500">
+        Looks right — post to feed
+      </button>
+      <p class="mt-2 text-center text-xs text-white/40">
+        Nothing is shared until you confirm the analysis above.
+      </p>
+    </form>
+  {% endif %}
+
+{% endif %}
+
+</div>

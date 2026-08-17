@@ -1,10 +1,15 @@
-from django.db import models
-
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
 
 PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+class AnalysisStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    RUNNING = "running", "Running"
+    COMPLETE = "complete", "Complete"
+    FAILED = "failed", "Failed"
 
 
 class DerivedMetadata(models.Model):
@@ -15,6 +20,24 @@ class DerivedMetadata(models.Model):
     sample = models.OneToOneField(
         "library.Sample", on_delete=models.CASCADE, related_name="metadata"
     )
+
+    # --- job state ---
+    status = models.CharField(
+        max_length=20, choices=AnalysisStatus.choices,
+        default=AnalysisStatus.PENDING, db_index=True,
+    )
+    error_message = models.TextField(blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+    # --- container facts ---
+    duration_seconds = models.FloatField(null=True, blank=True)
+    sample_rate = models.PositiveIntegerField(null=True, blank=True)
+    channels = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # Pre-computed waveform for wavesurfer.js: interleaved min/max pairs,
+    # normalised to -1..1. Computed once at ingest so the browser never has
+    # to download and decode the full file to draw the waveform.
+    peaks = models.JSONField(default=list, blank=True)
 
     # --- pipeline output: never user-writable ---
     bpm = models.FloatField(null=True, blank=True)
@@ -34,6 +57,7 @@ class DerivedMetadata(models.Model):
     )
 
     instrument = models.CharField(max_length=50, blank=True)
+    instrument_confidence = models.FloatField(null=True, blank=True)
     quality_flags = models.JSONField(default=dict, blank=True)
 
     analysed_at = models.DateTimeField(null=True, blank=True)
@@ -96,7 +120,15 @@ class DerivedMetadata(models.Model):
 
     @property
     def is_analysed(self):
-        return self.analysed_at is not None
+        return self.status == AnalysisStatus.COMPLETE
+
+    @property
+    def is_running(self):
+        return self.status in (AnalysisStatus.PENDING, AnalysisStatus.RUNNING)
+
+    @property
+    def has_failed(self):
+        return self.status == AnalysisStatus.FAILED
 
     @property
     def is_pitched(self):
@@ -126,6 +158,27 @@ class DerivedMetadata(models.Model):
     @property
     def bpm_display(self):
         return f"{self.effective_bpm:.1f}" if self.has_tempo else ""
+
+    @property
+    def duration_display(self):
+        if self.duration_seconds is None:
+            return ""
+        minutes, seconds = divmod(int(self.duration_seconds), 60)
+        return f"{minutes}:{seconds:02d}"
+
+    @property
+    def quality_warnings(self):
+        """Human-readable list for the analysis page."""
+        labels = {
+            "clipping": "Clipping detected",
+            "very_quiet": "Very low level",
+            "dc_offset": "DC offset present",
+            "leading_silence": "Silence at start",
+            "trailing_silence": "Silence at end",
+            "low_sample_rate": "Below 44.1 kHz",
+            "too_short_for_tempo": "Too short for tempo detection",
+        }
+        return [labels[k] for k, v in self.quality_flags.items() if v and k in labels]
 
     # --- audition helpers ---
 

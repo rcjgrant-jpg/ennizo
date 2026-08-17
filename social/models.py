@@ -1,6 +1,27 @@
 # social/models.py
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+
+
+class PostQuerySet(models.QuerySet):
+
+    def published(self):
+        return self.filter(is_published=True)
+
+    def drafts_for(self, user):
+        return self.filter(is_published=False, author=user)
+
+    def visible_to(self, user):
+        """Published posts, plus the viewer's own drafts."""
+        if not user.is_authenticated:
+            return self.published()
+        return self.filter(Q(is_published=True) | Q(author=user))
+
+    def stale_drafts(self, older_than_days=7):
+        cutoff = timezone.now() - timezone.timedelta(days=older_than_days)
+        return self.filter(is_published=False, created_at__lt=cutoff)
 
 
 class Post(models.Model):
@@ -14,14 +35,28 @@ class Post(models.Model):
         on_delete=models.PROTECT,
         related_name="post",
     )
-    body = models.CharField(max_length=250)
+    body = models.CharField(max_length=250, blank=True)
+
+    # A post is created as a draft at upload and published only once the
+    # user has confirmed the analysis output (S4: human authority).
+    is_published = models.BooleanField(default=False, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PostQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.author}: {self.body[:40]}"
+        state = "" if self.is_published else " [draft]"
+        return f"{self.author}: {self.body[:40]}{state}"
+
+    def publish(self):
+        self.is_published = True
+        self.published_at = timezone.now()
+        self.save(update_fields=["is_published", "published_at"])
 
 
 class Comment(models.Model):
@@ -52,7 +87,9 @@ class Like(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["post", "user"], name="unique_like_per_user_post"),
+            models.UniqueConstraint(
+                fields=["post", "user"], name="unique_like_per_user_post"
+            ),
         ]
 
     def __str__(self):

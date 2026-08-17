@@ -13,4 +13,5 @@ urlpatterns = [
     path("folders/<int:pk>/samples/", views.folder_samples, name="folder_samples"),
     path("samples/<int:pk>/move/", views.move_sample, name="move_sample"),
     path("samples/<int:pk>/delete/", views.delete_sample, name="delete_sample"),
+   
 ]
