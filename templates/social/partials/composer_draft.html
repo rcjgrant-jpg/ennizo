@@ -1,0 +1,37 @@
+<div id="composer-attach"
+     class="border-border mt-3 space-y-3 border-t pt-3"
+     {% if metadata.is_running %}
+       hx-get="{% url 'social:draft_state' post.pk %}"
+       hx-trigger="every 2s"
+       hx-target="#composer-attach"
+       hx-swap="outerHTML"
+     {% endif %}>
+
+  <input type="hidden" name="draft_pk" value="{{ post.pk }}" form="composer-form">
+
+  <div class="flex items-center justify-between">
+    <p class="text-xs font-medium">{{ sample.title }}</p>
+    <button type="button"
+            hx-get="{% url 'social:index' %}?compose"
+            hx-target="#composer-attach"
+            hx-select="#composer-attach"
+            hx-swap="outerHTML"
+            class="text-muted-foreground text-xs hover:underline">
+      Replace
+    </button>
+  </div>
+
+  {% include "analysis/_analysis_state.html" %}
+
+  {% if in_composer %}
+    <button type="submit" form="composer-form" id="composer-post"
+            hx-swap-oob="true"
+            class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40"
+            {% if metadata.is_running %}disabled{% endif %}>
+      Post
+    </button>
+  {% endif %}
+
+  
+
+</div>

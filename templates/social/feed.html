@@ -4,59 +4,40 @@
 <div class="mx-auto w-full max-w-2xl px-4 py-6">
 
   {% if form %}
-    <form method="post" action="{% url 'social:create_post' %}"
+    <form method="post" id="composer-form"
+          action="{% url 'social:publish_draft' %}"
+          hx-post="{% url 'social:publish_draft' %}"
+          hx-target="#composer-form"
+          hx-swap="outerHTML"
           enctype="multipart/form-data"
           class="bg-card border-border mb-4 rounded-xl border p-4">
       {% csrf_token %}
 
-      {% if form.non_field_errors %}
+      {% if publish_form.non_field_errors %}
         <div class="text-destructive mb-3 text-xs">
-          {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+          {% for error in publish_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
         </div>
       {% endif %}
 
-      {{ form.body }}
+      {{ publish_form.body }}
 
-      <input type="text" name="tags" value="{{ form.tags.value|default:'' }}"
+      <input type="text" name="tags" value="{{ publish_form.tags.value|default:'' }}"
              placeholder="Tags: drums, breakbeat, lo-fi"
              class="bg-muted border-border mt-3 w-full rounded-md border px-3 py-2 text-xs">
-      {% for error in form.tags.errors %}
+      {% for error in publish_form.tags.errors %}
         <p class="text-destructive mt-1 text-xs">{{ error }}</p>
       {% endfor %}
 
-      <div class="border-border mt-3 space-y-2 border-t pt-3">
-        <label class="text-muted-foreground block text-xs">Attach a sample</label>
-
-        <input type="file" name="audio_file" accept=".wav,.mp3,.aiff,.flac"
-               class="text-muted-foreground file:bg-muted file:text-foreground w-full text-xs file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs">
-        {% for error in form.audio_file.errors %}
-          <p class="text-destructive text-xs">{{ error }}</p>
-        {% endfor %}
-
-        <p class="text-muted-foreground text-xs">or</p>
-
-        <select name="sample"
-                class="bg-muted border-border w-full rounded-md border px-2 py-1.5 text-xs">
-          <option value="">Choose an existing sample…</option>
-          {% for sample in form.fields.sample.queryset %}
-            <option value="{{ sample.pk }}"
-                    {% if form.sample.value|stringformat:"s" == sample.pk|stringformat:"s" %}selected{% endif %}>
-              {{ sample.title }}
-            </option>
-          {% endfor %}
-        </select>
-        {% for error in form.sample.errors %}
-          <p class="text-destructive text-xs">{{ error }}</p>
-        {% endfor %}
-      </div>
+      {% include "social/partials/composer_attach.html" %}
 
       <div class="mt-4 flex items-center gap-2">
         <a href="{% url 'library:record' %}"
            class="bg-muted rounded-md px-3 py-1.5 text-xs">Record</a>
         <a href="{% url 'library:upload' %}"
            class="text-muted-foreground text-xs">Upload without posting</a>
-        <button type="submit"
-                class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold">
+        <button type="submit" id="composer-post"
+                class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40"
+                disabled>
           Post
         </button>
       </div>
@@ -67,3 +48,4 @@
 
 </div>
 {% endblock %}
+</parameter>

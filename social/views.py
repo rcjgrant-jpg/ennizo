@@ -9,9 +9,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from library.models import SampleTag, Tag, TagSource
+from library.models import SampleTag, Tag, TagSource, TagStatus
 
-from .forms import CommentForm, PostForm
+from .forms import CommentForm, DraftForm, PublishForm
 from .models import Comment, Like, Post
 
 
@@ -41,7 +41,7 @@ def _tag_url(selected, add=None, remove=None):
 
 def _feed_queryset(request, selected):
     posts = (
-        Post.objects
+        Post.objects.published()
         .select_related("author", "sample")
         .prefetch_related("sample__tags")
         .annotate(
@@ -67,7 +67,7 @@ def _visible_post_ids(selected):
     Kept deliberately plain so it can be used as a subquery without tripping
     PostgreSQL's SELECT DISTINCT / ORDER BY restriction.
     """
-    qs = Post.objects.all()
+    qs = Post.objects.published()
     for name in selected:
         qs = qs.filter(sample__tags__name=name)
     return qs.values_list("id", flat=True).distinct()
@@ -106,42 +106,85 @@ def _comments_context(post, form):
 @login_required
 def index(request):
     context = _feed_context(request)
-    context["form"] = PostForm(user=request.user) if "compose" in request.GET else None
+    context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
+    context["publish_form"] = PublishForm() if "compose" in request.GET else None
 
     if request.headers.get("HX-Request"):
         return render(request, "social/partials/feed_root.html", context)
 
     return render(request, "social/feed.html", context)
 
-
 @login_required
-def create_post(request):
-    if request.method != "POST":
-        return redirect("social:index")
-
-    form = PostForm(request.POST, request.FILES, user=request.user)
+@require_POST
+def create_draft(request):
+    """Phase one. Creates Sample (if uploading) and a draft Post, then returns
+    the analysis panel. Fired by htmx as soon as a file is chosen."""
+    form = DraftForm(request.POST, request.FILES, user=request.user)
 
     if not form.is_valid():
-        context = _feed_context(request)
-        context["form"] = form
-        return render(request, "social/feed.html", context)
+        return render(request, "social/partials/composer_attach.html", {"form": form})
 
     with transaction.atomic():
         sample = form.cleaned_data.get("sample") or form.build_sample()
+        post = Post.objects.create(author=request.user, sample=sample, body="")
 
+    return render(request, "social/partials/composer_draft.html", {
+        "post": post,
+        "sample": sample,
+        "metadata": getattr(sample, "metadata", None),
+        "in_composer": True,
+    })
+    
+@login_required
+def draft_state(request, pk):
+    """Polled fragment for the composer's analysis panel."""
+    post = get_object_or_404(
+        Post.objects.select_related("sample__metadata"), pk=pk, author=request.user
+    )
+    return render(request, "social/partials/composer_draft.html", {
+        "post": post,
+        "sample": post.sample,
+        "metadata": getattr(post.sample, "metadata", None),
+        "in_composer": True,
+    })
+
+
+@login_required
+@require_POST
+def publish_draft(request):
+    """Phase two. Writes caption and tags onto the draft, then publishes."""
+    post = get_object_or_404(
+        Post.objects.select_related("sample"),
+        pk=request.POST.get("draft_pk") or 0,
+        author=request.user,
+    )
+    form = PublishForm(request.POST, instance=post)
+
+    if not form.is_valid():
+        return render(request, "social/partials/composer_draft.html", {
+            "post": post,
+            "sample": post.sample,
+            "metadata": getattr(post.sample, "metadata", None),
+            "form": form,
+            "in_composer": True,
+        })
+
+    with transaction.atomic():
+        post = form.save()
         for name in form.cleaned_data["tags"]:
             tag, _ = Tag.objects.get_or_create(name=name)
             SampleTag.objects.get_or_create(
-                sample=sample, tag=tag, defaults={"source": TagSource.USER}
+                sample=post.sample, tag=tag,
+                defaults={"source": TagSource.USER, "status": TagStatus.ACCEPTED},
             )
-
-        post = form.save(commit=False)
-        post.author = request.user
-        post.sample = sample
-        post.save()
+        if not post.is_published:
+            post.publish()
 
     messages.success(request, "Posted.")
     return redirect("social:index")
+
+
+
 
 
 @login_required
@@ -201,7 +244,7 @@ def tag_suggest(request):
 
     if query:
         rows = (
-            Post.objects
+            Post.objects.published()
             .filter(id__in=_visible_post_ids(selected), sample__tags__name__icontains=query)
             .values("sample__tags__name")
             .annotate(post_count=Count("id", distinct=True))

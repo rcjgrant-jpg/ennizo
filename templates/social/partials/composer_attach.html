@@ -1,0 +1,42 @@
+<div id="composer-attach"
+     class="border-border mt-3 space-y-2 border-t pt-3"
+     hx-post="{% url 'social:create_draft' %}"
+     hx-trigger="change from:#composer-file, change from:#composer-sample"
+     hx-target="#composer-attach"
+     hx-swap="outerHTML"
+     hx-encoding="multipart/form-data"
+     hx-include="#composer-attach"
+     hx-indicator="#composer-attaching">
+
+  <label class="text-muted-foreground block text-xs">Attach a sample</label>
+
+  {% if form.non_field_errors %}
+    <div class="text-destructive text-xs">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <input type="file" name="audio_file" id="composer-file"
+         accept=".wav,.mp3,.aiff,.flac"
+         class="text-muted-foreground file:bg-muted file:text-foreground w-full text-xs file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs">
+  {% for error in form.audio_file.errors %}
+    <p class="text-destructive text-xs">{{ error }}</p>
+  {% endfor %}
+
+  <p class="text-muted-foreground text-xs">or</p>
+
+  <select name="sample" id="composer-sample"
+          class="bg-muted border-border w-full rounded-md border px-2 py-1.5 text-xs">
+    <option value="">Choose an existing sample…</option>
+    {% for sample in form.fields.sample.queryset %}
+      <option value="{{ sample.pk }}">{{ sample.title }}</option>
+    {% endfor %}
+  </select>
+  {% for error in form.sample.errors %}
+    <p class="text-destructive text-xs">{{ error }}</p>
+  {% endfor %}
+
+  <p id="composer-attaching" class="htmx-indicator text-muted-foreground text-xs">
+    Uploading…
+  </p>
+</div>
