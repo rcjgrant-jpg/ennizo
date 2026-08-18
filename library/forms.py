@@ -3,7 +3,9 @@ from pathlib import Path
 
 from django import forms
 
-from .models import Folder, Sample
+from .models import AUDIO_EXTENSIONS, Folder, Sample
+
+ALLOWED_SUFFIXES = {f".{ext}" for ext in AUDIO_EXTENSIONS}
 
 
 class SampleUploadForm(forms.ModelForm):
@@ -36,8 +38,8 @@ class SampleUploadForm(forms.ModelForm):
     def clean_audio_file(self):
         f = self.cleaned_data["audio_file"]
         ext = Path(f.name).suffix.lower()
-        if ext not in {".wav", ".mp3", ".aiff", ".flac"}:
-            raise forms.ValidationError("Upload a WAV, MP3, AIFF or FLAC file.")
+        if ext not in ALLOWED_SUFFIXES:
+            raise forms.ValidationError("Upload a WAV, MP3, AIF or FLAC file.")
         if f.size > 100 * 1024 * 1024:
             raise forms.ValidationError("That file is too large (100MB maximum).")
         return f

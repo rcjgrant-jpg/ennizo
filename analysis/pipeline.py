@@ -1,11 +1,10 @@
-"""Deterministic audio analysis. Pure functions over a file path —
-no Django imports, so this is unit-testable in isolation."""
 
 import numpy as np
 import librosa
 import soundfile as sf
 import essentia.standard as es
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +13,7 @@ PIPELINE_VERSION = "1.1.0"
 ANALYSIS_SR = 22050
 PEAK_BUCKETS = 2000
 
-PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
-# Essentia may report flat spellings; the storage format uses sharps.
-ENHARMONIC = {
-    "Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#",
-    "Cb": "B", "Fb": "E", "E#": "F", "B#": "C",
-}
+PITCH_CLASSES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
 # Threshold on Essentia's key strength. Higher than the old margin-based
 # threshold because the two measure different things — see _detect_key.
@@ -34,6 +27,10 @@ KEY_TAG_THRESHOLD = 0.6
 KEY_PROFILE = "edma"
 KEY_SR = 44100          # rate the edma profiles were fitted and evaluated at
 KEY_MIN_DURATION = 0.5  # seconds; below this a key estimate is meaningless
+
+HOP_LENGTH = 512
+
+TARGET_SR = 44100 
 
 def _container_facts(path):
     info = sf.info(str(path))
@@ -70,30 +67,26 @@ def _compute_peaks(y, buckets=PEAK_BUCKETS):
 
 
 def _detect_tempo(y, sr, duration):
-    """Returns (bpm, confidence). Confidence is derived from how evenly
-    spaced the detected beats are: consistent spacing implies a reliable
-    estimate, erratic spacing implies the tracker is guessing."""
+    """Returns (bpm, confidence in 0-1)."""
     if duration < 2.0:
         return None, None
 
-    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-    tempo, beat_frames = librosa.beat.beat_track(
-        onset_envelope=onset_env, sr=sr, units="frames"
-    )
-    bpm = float(np.atleast_1d(tempo)[0])
+    if sr != TARGET_SR:
+        y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SR)
 
-    if bpm <= 0 or len(beat_frames) < 4:
+    audio = np.ascontiguousarray(y, dtype=np.float32)
+
+    extractor = es.RhythmExtractor2013(method="multifeature")
+    bpm, beats, beats_conf, _, _ = extractor(audio)
+
+    if bpm <= 0 or len(beats) < 4:
         return None, None
 
-    times = librosa.frames_to_time(beat_frames, sr=sr)
-    intervals = np.diff(times)
-    if intervals.size == 0 or intervals.mean() <= 0:
-        return bpm, 0.0
+    confidence = min(1.0, beats_conf / 3.5)
+    if confidence < 0.3:
+        return round(float(bpm), 2), round(confidence, 3)  # flag as unsure
 
-    # Coefficient of variation: 0 is perfectly regular.
-    cv = float(intervals.std() / intervals.mean())
-    confidence = max(0.0, min(1.0, 1.0 - cv * 2))
-    return round(bpm, 2), round(confidence, 3)
+    return round(float(bpm), 2), round(confidence, 3)
 
 
 
@@ -127,7 +120,6 @@ def _detect_key(y, sr):
     except Exception:
         return None, "", None
 
-    key = ENHARMONIC.get(key, key)
     if key not in PITCH_CLASSES:
         logger.warning("Unrecognised key name from Essentia: %r", key)
         return None, "", None
@@ -200,7 +192,7 @@ def derived_tag_names(result):
         names.append(f"{int(round(result['bpm']))}bpm")
 
     if result.get("tonic") is not None and (result.get("key_confidence") or 0) >= KEY_TAG_THRESHOLD:
-        tonic_name = PITCH_CLASSES[result["tonic"]].lower().replace("#", "sharp")
+        tonic_name = PITCH_CLASSES[result["tonic"]].replace("b", "flat").lower()
         names.append(f"{tonic_name}-{result['mode']}" if result["mode"] else tonic_name)
 
     duration = result.get("duration_seconds") or 0
