@@ -7,6 +7,8 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+AUDIO_EXTENSIONS = ["wav", "aiff", "aif", "aifc", "flac", "mp3"]
+
 
 def sample_upload_path(instance, filename):
     """Partition uploads by owner and date; randomise the stored filename."""
@@ -183,7 +185,7 @@ class Sample(models.Model):
         upload_to=sample_upload_path,
         validators=[
             FileExtensionValidator(
-                allowed_extensions=["wav", "mp3", "aiff", "flac"]
+                allowed_extensions=AUDIO_EXTENSIONS
             )
         ],
     )

@@ -18,12 +18,12 @@
         Audio file
       </label>
       <input type="file" name="audio_file" id="{{ form.audio_file.id_for_label }}"
-             accept=".wav,.mp3,.aiff,.flac" required
-             class="text-muted-foreground file:bg-muted file:text-foreground w-full text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm">
+            accept="audio/*,.wav,.aiff,.aif,.aifc,.flac,.mp3"
+            class="text-muted-foreground file:bg-muted file:text-foreground w-full text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm">
       {% for error in form.audio_file.errors %}
         <p class="text-destructive mt-1 text-xs">{{ error }}</p>
       {% endfor %}
-      <p class="text-muted-foreground mt-1 text-xs">WAV, MP3, AIFF or FLAC. 100MB maximum.</p>
+      <p class="text-muted-foreground mt-1 text-xs">WAV, MP3, AIF or FLAC. 100MB maximum.</p>
     </div>
 
     <div>
