@@ -118,7 +118,7 @@ def upload(request):
                     )
 
             messages.success(request, f"“{sample.title}” uploaded.")
-            return redirect("library:index")
+            return redirect("analysis:sample_analysis", pk=sample.pk)
     else:
         form = SampleUploadForm(user=request.user)
 

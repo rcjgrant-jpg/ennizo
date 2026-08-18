@@ -1,15 +1,11 @@
 import uuid
 from pathlib import Path
 
-from django.db import models
-from django.utils import timezone
-
-from django.db.models import Q
-
-
+from django.core.validators import FileExtensionValidator
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db import models
-from django.core.validators import FileExtensionValidator
+from django.db.models import Q
+from django.utils import timezone
 
 
 def sample_upload_path(instance, filename):
@@ -19,8 +15,9 @@ def sample_upload_path(instance, filename):
     stamp = instance.created_at or timezone.now()
     return f"samples/{owner_id}/{stamp:%Y/%m}/{uuid.uuid4().hex}{ext}"
 
+
 class SampleQuerySet(models.QuerySet):
-    
+
     def public(self):
         return self.filter(is_public=True)
 
@@ -73,13 +70,20 @@ class SampleQuerySet(models.QuerySet):
         return qs
 
     def tagged(self, *names):
-        return self.filter(tags__name__in=names).distinct()
+        """Only tags the user has accepted — suggestions are not searchable."""
+        return self.filter(
+            sample_tags__tag__name__in=names,
+            sample_tags__status=TagStatus.ACCEPTED,
+        ).distinct()
 
     def analysed(self):
-        return self.filter(metadata__analysed_at__isnull=False)
+        return self.filter(metadata__status="complete")
 
     def pending_analysis(self):
-        return self.filter(metadata__analysed_at__isnull=True)
+        """LEFT JOIN so samples with no metadata row are included."""
+        return self.filter(
+            Q(metadata__isnull=True) | Q(metadata__status__in=["pending", "failed"])
+        )
 
 
 class Folder(models.Model):
@@ -101,12 +105,11 @@ class Folder(models.Model):
         return self.name
 
 
-
 class Tag(models.Model):
     class Kind(models.TextChoices):
         OBJECTIVE = "objective", "Objective"
         SUBJECTIVE = "subjective", "Subjective"
-        
+
     name = models.CharField(max_length=100, unique=True)
     kind = models.CharField(max_length=20, choices=Kind.choices)
 
@@ -115,18 +118,34 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.name
-    
+
+
 class TagSource(models.TextChoices):
-    DERIVED = "derived", "Derived"
+    """Where the tag came from — a provenance record, never overwritten."""
+    DERIVED = "derived", "Derived"        # deterministic pipeline (bpm, key)
+    PREDICTED = "predicted", "Predicted"  # ML classifier output
     USER = "user", "User"
     IMPORTED = "imported", "Imported"
-    
-   # user correction, separate field
-    
+
+
+class TagStatus(models.TextChoices):
+    """Whether the human has ruled on it — orthogonal to source."""
+    SUGGESTED = "suggested", "Suggested"
+    ACCEPTED = "accepted", "Accepted"
+    REJECTED = "rejected", "Rejected"
+
+
 class SampleTag(models.Model):
-    sample = models.ForeignKey("Sample", on_delete=models.CASCADE, related_name="sample_tags")
+    sample = models.ForeignKey(
+        "Sample", on_delete=models.CASCADE, related_name="sample_tags"
+    )
     tag = models.ForeignKey("Tag", on_delete=models.CASCADE)
     source = models.CharField(max_length=20, choices=TagSource.choices)
+    status = models.CharField(
+        max_length=20, choices=TagStatus.choices, default=TagStatus.ACCEPTED
+    )
+    confidence = models.FloatField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -135,9 +154,25 @@ class SampleTag(models.Model):
                 fields=["sample", "tag"], name="unique_tag_per_sample"
             )
         ]
+        ordering = ["-confidence", "tag__name"]
 
     def __str__(self):
         return f"{self.sample_id} → {self.tag_id}"
+
+    def accept(self):
+        self.status = TagStatus.ACCEPTED
+        self.resolved_at = timezone.now()
+        self.save(update_fields=["status", "resolved_at"])
+
+    def reject(self):
+        self.status = TagStatus.REJECTED
+        self.resolved_at = timezone.now()
+        self.save(update_fields=["status", "resolved_at"])
+
+    @property
+    def is_machine_generated(self):
+        return self.source in (TagSource.DERIVED, TagSource.PREDICTED)
+
 
 class Sample(models.Model):
     folder = models.ForeignKey(
@@ -146,7 +181,11 @@ class Sample(models.Model):
     title = models.CharField(max_length=255)
     audio_file = models.FileField(
         upload_to=sample_upload_path,
-        validators=[FileExtensionValidator(allowed_extensions=["wav", "mp3", "aiff", "flac"])],
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=["wav", "mp3", "aiff", "flac"]
+            )
+        ],
     )
     is_public = models.BooleanField(default=False)          # U2.7
     note = models.TextField(blank=True)                     # U2.6
@@ -168,9 +207,18 @@ class Sample(models.Model):
     def owner(self):
         return self.folder.library.user
 
+    def accepted_tags(self):
+        return self.sample_tags.filter(
+            status=TagStatus.ACCEPTED
+        ).select_related("tag")
+
+    def suggested_tags(self):
+        return self.sample_tags.filter(
+            status=TagStatus.SUGGESTED
+        ).select_related("tag")
+
     def derived_bpm(self):
         meta = getattr(self, "metadata", None)
-        if meta is None or meta.analysed_at is None:
+        if meta is None or not meta.is_analysed:
             return None
-        return meta.bpm_override if meta.bpm_override is not None else meta.bpm
-            
+        return meta.effective_bpm
