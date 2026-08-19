@@ -52,6 +52,7 @@ class DraftForm(forms.Form):
             title=Path(upload.name).stem,
             audio_file=upload,
             is_public=True,
+            is_committed=False,
         )
         sample.save()
         return sample
