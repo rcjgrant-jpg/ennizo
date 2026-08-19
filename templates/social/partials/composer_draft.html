@@ -23,10 +23,5 @@
 
   {% include "analysis/_analysis_state.html" %}
 
-  {% comment %}Withheld while analysis runs: the 2s poll replaces this whole
-  region, which would wipe a half-typed tag.{% endcomment %}
-  {% if not metadata.is_running %}
-    {% include "social/partials/draft_tags.html" %}
-  {% endif %}
 
 </div>

@@ -237,57 +237,7 @@ def discard_draft(request):
     })
 
 
-@login_required
-def draft_tags(request, pk):
-    """Render the composer's tag panel, or act on it and re-render.
 
-    GET and POST share one view because every action ends the same way — the
-    panel redrawn from the database. Separate routes would differ only in the
-    two lines that mutate a row.
-    """
-    post = get_object_or_404(
-        Post.objects.select_related("sample"), pk=pk, author=request.user
-    )
-    sample = sample = get_object_or_404(Sample.objects.in_library_of(request.user), pk=pk)
-    action = request.POST.get("action")
-    tag_pk = request.POST.get("tag_pk", "")
-
-    if action == "add":
-        name = (request.POST.get("tag_name") or "").strip().lower()[:100]
-        if name and len(sample.accepted_tags()) < 10:
-            # Hand-typed tags are subjective by definition; the deterministic
-            # pipeline is what produces objective ones.
-            tag, _ = Tag.objects.get_or_create(
-                name=name, defaults={"kind": Tag.Kind.SUBJECTIVE}
-            )
-            row, created = SampleTag.objects.get_or_create(
-                sample=sample, tag=tag,
-                defaults={"source": TagSource.USER, "status": TagStatus.ACCEPTED},
-            )
-            if not created:
-                # Typing a tag the machine suggested, or one previously
-                # rejected, counts as accepting it. Source is preserved, so
-                # the prediction still records as a hit.
-                row.accept()
-
-    elif action in ("keep", "remove") and tag_pk.isdigit():
-        row = get_object_or_404(SampleTag, pk=tag_pk, sample=sample)
-        # Rejected rows are kept rather than deleted: rejection rate per label
-        # is the accuracy measure for the analysis pipeline. accept()/reject()
-        # also stamp resolved_at, which writing status directly would not.
-        row.accept() if action == "keep" else row.reject()
-
-    # Which chip is expanded, and whether the new-tag cell is showing, are
-    # read from the query string rather than held in the browser. Same
-    # principle as the feed's tag filter: the server owns what is displayed.
-    open_raw = request.GET.get("open", "")
-
-    return render(request, "social/partials/draft_tags.html", {
-        "post": post,
-        "sample": sample,
-        "open_pk": int(open_raw) if open_raw.isdigit() else 0,
-        "adding": request.GET.get("adding") == "1",
-    })
 
 
 @login_required
