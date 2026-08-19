@@ -87,7 +87,7 @@ def folder_samples(request, pk):
 
     return render(request, "library/partials/folder_samples.html", {
         "folder": folder,
-        "samples": folder.samples.not_drafts().select_related("metadata").prefetch_related("sample_tags__tag"),
+        "samples": folder.samples.committed().select_related("metadata").prefetch_related("sample_tags__tag"),
         "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
     })
     
@@ -105,7 +105,7 @@ def move_sample(request, pk):
 
     return render(request, "library/partials/folder_samples.html", {
         "folder": origin,
-        "samples": origin.samples.not_drafts().select_related("metadata").prefetch_related("sample_tags__tag"),
+        "samples": origin.samples.committed().select_related("metadata").prefetch_related("sample_tags__tag"),
         "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
     })
 
@@ -128,7 +128,7 @@ def delete_sample(request, pk):
 
     return render(request, "library/partials/folder_samples.html", {
         "folder": folder,
-        "samples": folder.samples.not_drafts().select_related("metadata").prefetch_related("sample_tags__tag"),
+        "samples": folder.samples.committed().select_related("metadata").prefetch_related("sample_tags__tag"),
         "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
     })
 

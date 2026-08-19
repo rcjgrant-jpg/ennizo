@@ -32,7 +32,7 @@ class PostQuerySet(models.QuerySet):
         which is correct for published posts, so the post must go first.
         """
         count = 0
-        for post in self.filter(is_published=False).select_related("sample"):
+        for post in self.filter(sample__is_committed=False).select_related("sample"):
             sample = post.sample
             post.delete()
             if sample.audio_file:

@@ -35,7 +35,7 @@ def profile(request, username):
         .in_library_of(profile_user)
         .visible_to(request.user)
         .select_related("metadata")
-        .not_drafts()
+        .committed()
         .prefetch_related("sample_tags__tag")
     )
     return render(request, "accounts/profile.html", {

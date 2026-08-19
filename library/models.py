@@ -46,8 +46,7 @@ class SampleQuerySet(models.QuerySet):
             .distinct()
         )
 
-    def not_drafts(self):
-        
+    def committed(self):
         
         return self.filter(is_committed=True)
 
