@@ -203,6 +203,7 @@ class Sample(models.Model):
     is_public = models.BooleanField(default=False)          # U2.7
     note = models.TextField(blank=True)                     # U2.6
     created_at = models.DateTimeField(auto_now_add=True)
+    is_committed = models.BooleanField(default=True)
 
     tags = models.ManyToManyField(
         "Tag", through="SampleTag", related_name="samples"
