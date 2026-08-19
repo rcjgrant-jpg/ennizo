@@ -46,6 +46,17 @@ class SampleQuerySet(models.QuerySet):
             .distinct()
         )
 
+    def not_drafts(self):
+        """Exclude samples attached to an unpublished post.
+
+        A sample uploaded through the composer is filed the moment a file is
+        chosen, because analysis needs a row to attach to. Until the post is
+        published the user has not deliberately saved anything, so it should
+        not appear in their library. Samples with no post at all — uploaded
+        directly — are unaffected, since the join yields NULL.
+        """
+        return self.exclude(post__is_published=False)
+
     def with_metadata(self):
         return self.select_related("metadata")
 
@@ -210,14 +221,20 @@ class Sample(models.Model):
         return self.folder.library.user
 
     def accepted_tags(self):
-        return self.sample_tags.filter(
-            status=TagStatus.ACCEPTED
-        ).select_related("tag")
+        """Tags the user has confirmed, or has not objected to.
+
+        Filtered in Python rather than with .filter() so that a
+        prefetch_related("sample_tags__tag") is reused. A .filter() on a
+        related manager always issues a fresh query, which would mean one
+        query per sample on the feed and library pages.
+        """
+        return [st for st in self.sample_tags.all()
+                if st.status == TagStatus.ACCEPTED]
 
     def suggested_tags(self):
-        return self.sample_tags.filter(
-            status=TagStatus.SUGGESTED
-        ).select_related("tag")
+        """Machine suggestions awaiting a human ruling. See accepted_tags."""
+        return [st for st in self.sample_tags.all()
+                if st.status == TagStatus.SUGGESTED]
 
     def derived_bpm(self):
         meta = getattr(self, "metadata", None)

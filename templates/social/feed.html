@@ -21,13 +21,6 @@
 
       {{ publish_form.body }}
 
-      <input type="text" name="tags" value="{{ publish_form.tags.value|default:'' }}"
-             placeholder="Tags: drums, breakbeat, lo-fi"
-             class="bg-muted border-border mt-3 w-full rounded-md border px-3 py-2 text-xs">
-      {% for error in publish_form.tags.errors %}
-        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
-      {% endfor %}
-
       {% include "social/partials/composer_attach.html" %}
 
       <div class="mt-4 flex items-center gap-2">
@@ -48,4 +41,3 @@
 
 </div>
 {% endblock %}
-</parameter>

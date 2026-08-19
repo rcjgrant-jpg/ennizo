@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -43,7 +44,7 @@ def _feed_queryset(request, selected):
     posts = (
         Post.objects.published()
         .select_related("author", "sample")
-        .prefetch_related("sample__tags")
+        .prefetch_related("sample__sample_tags__tag")
         .annotate(
             like_count=Count("likes", distinct=True),
             comment_count=Count("comments", distinct=True),
@@ -86,6 +87,22 @@ def _feed_context(request):
     }
 
 
+def _client_redirect(request, url_name):
+    """Redirect in a way htmx honours.
+
+    An ordinary 302 is followed transparently by the XHR, so htmx receives the
+    whole feed page and swaps it into the composer, nesting a second copy of
+    every post inside the first. HX-Redirect instructs htmx to perform a real
+    browser navigation instead. Non-htmx submissions still get a plain 302.
+    """
+    url = reverse(url_name)
+    if request.headers.get("HX-Request"):
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = url
+        return response
+    return redirect(url)
+
+
 def _comments_context(post, form):
     thread = (
         Comment.objects
@@ -100,11 +117,17 @@ def _comments_context(post, form):
         "comment_count": Comment.objects.filter(post=post).count(),
     }
 
-
 # --- views -------------------------------------------------------------------
 
 @login_required
 def index(request):
+    # A full page load of the feed means the user navigated here rather than
+    # filtering in place, so any composer left open elsewhere is abandoned.
+    # htmx requests are excluded: tag filtering re-renders the feed while the
+    # composer is still on screen above it.
+    if not request.headers.get("HX-Request"):
+        Post.objects.drafts_for(request.user).discard()
+
     context = _feed_context(request)
     context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
     context["publish_form"] = PublishForm() if "compose" in request.GET else None
@@ -125,6 +148,8 @@ def create_draft(request):
         return render(request, "social/partials/composer_attach.html", {"form": form})
 
     with transaction.atomic():
+        # Attaching a second file supersedes the first; the old draft goes.
+        Post.objects.drafts_for(request.user).discard()
         sample = form.cleaned_data.get("sample") or form.build_sample()
         post = Post.objects.create(author=request.user, sample=sample, body="")
 
@@ -134,7 +159,8 @@ def create_draft(request):
         "metadata": getattr(sample, "metadata", None),
         "in_composer": True,
     })
-    
+
+
 @login_required
 def draft_state(request, pk):
     """Polled fragment for the composer's analysis panel."""
@@ -152,11 +178,19 @@ def draft_state(request, pk):
 @login_required
 @require_POST
 def publish_draft(request):
-    """Phase two. Writes caption and tags onto the draft, then publishes."""
+    """Phase two. Writes the caption onto the draft, then publishes.
+
+    The draft's pk arrives in the POST body rather than the URL, because the
+    form's action is rendered before any draft exists — the hidden draft_pk
+    input is injected into the form when the attach area is swapped.
+    """
+    draft_pk = request.POST.get("draft_pk", "")
+    if not draft_pk.isdigit():
+        messages.error(request, "Attach a sample before posting.")
+        return _client_redirect(request, "social:index")
+
     post = get_object_or_404(
-        Post.objects.select_related("sample"),
-        pk=request.POST.get("draft_pk") or 0,
-        author=request.user,
+        Post.objects.select_related("sample"), pk=int(draft_pk), author=request.user
     )
     form = PublishForm(request.POST, instance=post)
 
@@ -171,20 +205,84 @@ def publish_draft(request):
 
     with transaction.atomic():
         post = form.save()
-        for name in form.cleaned_data["tags"]:
-            tag, _ = Tag.objects.get_or_create(name=name)
-            SampleTag.objects.get_or_create(
-                sample=post.sample, tag=tag,
-                defaults={"source": TagSource.USER, "status": TagStatus.ACCEPTED},
-            )
+        # Suggestions the user neither kept nor removed are accepted on
+        # publication. Discarding them instead would mean the classifier
+        # contributes nothing unless every chip is clicked, which penalises
+        # the common case. Rejection remains an explicit act.
+        SampleTag.objects.filter(
+            sample=post.sample, status=TagStatus.SUGGESTED
+        ).update(status=TagStatus.ACCEPTED)
         if not post.is_published:
             post.publish()
 
     messages.success(request, "Posted.")
-    return redirect("social:index")
+    return _client_redirect(request, "social:index")
 
 
 
+
+
+@login_required
+@require_POST
+def discard_draft(request):
+    """Throw away the current draft and return the empty attach control."""
+    Post.objects.drafts_for(request.user).discard()
+    return render(request, "social/partials/composer_attach.html", {
+        "form": DraftForm(user=request.user),
+    })
+
+
+@login_required
+def draft_tags(request, pk):
+    """Render the composer's tag panel, or act on it and re-render.
+
+    GET and POST share one view because every action ends the same way — the
+    panel redrawn from the database. Separate routes would differ only in the
+    two lines that mutate a row.
+    """
+    post = get_object_or_404(
+        Post.objects.select_related("sample"), pk=pk, author=request.user
+    )
+    sample = post.sample
+    action = request.POST.get("action")
+    tag_pk = request.POST.get("tag_pk", "")
+
+    if action == "add":
+        name = (request.POST.get("tag_name") or "").strip().lower()[:100]
+        if name and len(sample.accepted_tags()) < 10:
+            # Hand-typed tags are subjective by definition; the deterministic
+            # pipeline is what produces objective ones.
+            tag, _ = Tag.objects.get_or_create(
+                name=name, defaults={"kind": Tag.Kind.SUBJECTIVE}
+            )
+            row, created = SampleTag.objects.get_or_create(
+                sample=sample, tag=tag,
+                defaults={"source": TagSource.USER, "status": TagStatus.ACCEPTED},
+            )
+            if not created:
+                # Typing a tag the machine suggested, or one previously
+                # rejected, counts as accepting it. Source is preserved, so
+                # the prediction still records as a hit.
+                row.accept()
+
+    elif action in ("keep", "remove") and tag_pk.isdigit():
+        row = get_object_or_404(SampleTag, pk=tag_pk, sample=sample)
+        # Rejected rows are kept rather than deleted: rejection rate per label
+        # is the accuracy measure for the analysis pipeline. accept()/reject()
+        # also stamp resolved_at, which writing status directly would not.
+        row.accept() if action == "keep" else row.reject()
+
+    # Which chip is expanded, and whether the new-tag cell is showing, are
+    # read from the query string rather than held in the browser. Same
+    # principle as the feed's tag filter: the server owns what is displayed.
+    open_raw = request.GET.get("open", "")
+
+    return render(request, "social/partials/draft_tags.html", {
+        "post": post,
+        "sample": sample,
+        "open_pk": int(open_raw) if open_raw.isdigit() else 0,
+        "adding": request.GET.get("adding") == "1",
+    })
 
 
 @login_required

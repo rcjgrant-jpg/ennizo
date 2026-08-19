@@ -24,16 +24,16 @@
     </div>
   </div>
 
-  {% if post.sample.tags.all %}
+  {% if post.sample.accepted_tags %}
     <div class="mt-3 flex flex-wrap gap-1.5">
-      {% for tag in post.sample.tags.all %}
-        <a href="{% url 'social:index' %}?tag={{ tag.name|urlencode }}"
-           hx-get="{% url 'social:index' %}?tag={{ tag.name|urlencode }}"
+      {% for st in post.sample.accepted_tags %}
+        <a href="{% url 'social:index' %}?tag={{ st.tag.name|urlencode }}"
+           hx-get="{% url 'social:index' %}?tag={{ st.tag.name|urlencode }}"
            hx-target="#feed-root"
            hx-swap="outerHTML"
            hx-push-url="true"
            class="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs">
-          #{{ tag.name }}
+          #{{ st.tag.name }}
         </a>
       {% endfor %}
     </div>

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from library.models import Sample, SampleTag, Tag, TagSource, TagStatus
 from .models import AnalysisStatus, DerivedMetadata
-from .pipeline import analyse, derived_tag_names
+from .pipeline import analyse, estimated_tag_names, measured_tag_names
 
 logger = logging.getLogger(__name__)
 
@@ -57,17 +57,26 @@ def analyse_sample(self, sample_id):
 
 
 def _write_derived_tags(sample, result):
-    """Deterministic tags are written as ACCEPTED — they are measurements,
-    not opinions. Model predictions will be written as SUGGESTED instead."""
-    for name in derived_tag_names(result):
-        tag, _ = Tag.objects.get_or_create(
-            name=name.lower(), defaults={"kind": Tag.Kind.OBJECTIVE}
-        )
-        SampleTag.objects.get_or_create(
-            sample=sample,
-            tag=tag,
-            defaults={
-                "source": TagSource.DERIVED,
-                "status": TagStatus.ACCEPTED,
-            },
-        )
+    """Container facts are written ACCEPTED — they are measurements. Tempo and
+    key are written SUGGESTED, because they are algorithmic estimates and the
+    user is the authority on whether they are right."""
+    for name in measured_tag_names(result):
+        _write_tag(sample, name, TagStatus.ACCEPTED, None)
+
+    for name, confidence in estimated_tag_names(result):
+        _write_tag(sample, name, TagStatus.SUGGESTED, round(float(confidence), 3))
+
+
+def _write_tag(sample, name, status, confidence):
+    tag, _ = Tag.objects.get_or_create(
+        name=name.lower(), defaults={"kind": Tag.Kind.OBJECTIVE}
+    )
+    SampleTag.objects.get_or_create(
+        sample=sample,
+        tag=tag,
+        defaults={
+            "source": TagSource.DERIVED,
+            "status": status,
+            "confidence": confidence,
+        },
+    )

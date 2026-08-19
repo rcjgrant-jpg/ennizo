@@ -6,11 +6,16 @@ from django.db.models import Count, ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import FolderForm, SampleUploadForm
+from social.models import Post
+
 from .models import Folder, Sample, SampleTag, Tag, TagSource
 
 
 @login_required
 def index(request):
+    # Navigating here means the composer was left without publishing.
+    Post.objects.drafts_for(request.user).discard()
+
     folders = (
         Folder.objects
         .filter(library__user=request.user)
@@ -31,7 +36,7 @@ def folder_samples(request, pk):
 
     return render(request, "library/partials/folder_samples.html", {
         "folder": folder,
-        "samples": folder.samples.select_related("metadata").prefetch_related("tags"),
+        "samples": folder.samples.not_drafts().select_related("metadata").prefetch_related("sample_tags__tag"),
         "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
     })
     
@@ -49,7 +54,7 @@ def move_sample(request, pk):
 
     return render(request, "library/partials/folder_samples.html", {
         "folder": origin,
-        "samples": origin.samples.select_related("metadata").prefetch_related("tags"),
+        "samples": origin.samples.not_drafts().select_related("metadata").prefetch_related("sample_tags__tag"),
         "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
     })
 
@@ -72,7 +77,7 @@ def delete_sample(request, pk):
 
     return render(request, "library/partials/folder_samples.html", {
         "folder": folder,
-        "samples": folder.samples.select_related("metadata").prefetch_related("tags"),
+        "samples": folder.samples.not_drafts().select_related("metadata").prefetch_related("sample_tags__tag"),
         "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
     })
 

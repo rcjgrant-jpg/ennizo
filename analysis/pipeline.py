@@ -1,4 +1,3 @@
-
 import numpy as np
 import librosa
 import soundfile as sf
@@ -183,17 +182,33 @@ def analyse(path):
     }
 
 
-def derived_tag_names(result):
-    """Deterministic tags implied by the analysis output. Objective kind —
-    each is verifiable from the audio, unlike a user's subjective tag."""
-    names = []
+def estimated_tag_names(result):
+    """Tags inferred by an algorithm, not read from the file.
 
-    if result.get("bpm") and (result.get("bpm_confidence") or 0) >= 0.4:
-        names.append(f"{int(round(result['bpm']))}bpm")
+    Returns (name, confidence) pairs. Tempo and key are estimates gated behind
+    confidence thresholds; testing showed key detection in particular to be
+    unreliable on real material, so these are written as suggestions for the
+    user to confirm rather than as settled facts.
+    """
+    pairs = []
 
-    if result.get("tonic") is not None and (result.get("key_confidence") or 0) >= KEY_TAG_THRESHOLD:
+    bpm_confidence = result.get("bpm_confidence") or 0
+    if result.get("bpm") and bpm_confidence >= 0.4:
+        pairs.append((f"{int(round(result['bpm']))}bpm", bpm_confidence))
+
+    key_confidence = result.get("key_confidence") or 0
+    if result.get("tonic") is not None and key_confidence >= KEY_TAG_THRESHOLD:
         tonic_name = PITCH_CLASSES[result["tonic"]].replace("b", "flat").lower()
-        names.append(f"{tonic_name}-{result['mode']}" if result["mode"] else tonic_name)
+        name = f"{tonic_name}-{result['mode']}" if result["mode"] else tonic_name
+        pairs.append((name, key_confidence))
+
+    return pairs
+
+
+def measured_tag_names(result):
+    """Tags read directly from the container. Duration and channel count are
+    not estimates, so these need no human ruling."""
+    names = []
 
     duration = result.get("duration_seconds") or 0
     if duration < 2:
@@ -205,3 +220,9 @@ def derived_tag_names(result):
         names.append("mono")
 
     return names
+
+
+def derived_tag_names(result):
+    """Every deterministic tag, regardless of status. Objective kind — each is
+    verifiable from the audio, unlike a user's subjective tag."""
+    return [name for name, _ in estimated_tag_names(result)] + measured_tag_names(result)
