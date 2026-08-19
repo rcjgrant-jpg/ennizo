@@ -47,15 +47,9 @@ class SampleQuerySet(models.QuerySet):
         )
 
     def not_drafts(self):
-        """Exclude samples attached to an unpublished post.
-
-        A sample uploaded through the composer is filed the moment a file is
-        chosen, because analysis needs a row to attach to. Until the post is
-        published the user has not deliberately saved anything, so it should
-        not appear in their library. Samples with no post at all — uploaded
-        directly — are unaffected, since the join yields NULL.
-        """
-        return self.exclude(post__is_published=False)
+        
+        
+        return self.filter(is_committed=True)
 
     def with_metadata(self):
         return self.select_related("metadata")

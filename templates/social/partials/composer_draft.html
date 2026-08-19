@@ -30,11 +30,3 @@
   {% endif %}
 
 </div>
-
-{% comment %}Out-of-band: the Post button lives outside this fragment's swap
-target, so its enabled state is updated from the same response.{% endcomment %}
-<button type="submit" id="composer-post" hx-swap-oob="true"
-        class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40"
-        {% if metadata.is_running %}disabled{% endif %}>
-  Post
-</button>

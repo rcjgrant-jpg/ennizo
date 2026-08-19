@@ -2,8 +2,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Count, ProtectedError
+from django.db.models import Count, ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import FolderForm, SampleUploadForm
 from social.models import Post
@@ -19,8 +20,9 @@ def index(request):
     folders = (
         Folder.objects
         .filter(library__user=request.user)
-        .annotate(sample_count=Count("samples"))
+        .annotate(sample_count=Count("samples", filter=Q(samples__is_committed=True)))
         .order_by("name")
+        
     )
 
     return render(request, "library/index.html", {
@@ -107,12 +109,23 @@ def record(request):
 
 
 @login_required
+@require_POST
+def commit_sample(request, pk):
+
+    sample = get_object_or_404(Sample.objects.in_library_of(request.user), pk=pk)
+    sample.is_committed = True
+    sample.save(update_fields=["is_committed"])
+    return redirect("library:index")
+        
+
+@login_required
 def upload(request):
     if request.method == "POST":
         form = SampleUploadForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             with transaction.atomic():
                 sample = form.save(commit=False)
+                sample.is_committed = False
                 sample.folder = form.cleaned_data["folder"]
                 sample.save()
 

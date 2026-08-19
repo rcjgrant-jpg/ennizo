@@ -39,19 +39,7 @@
       {% endfor %}
     </div>
 
-    <div>
-      <label for="{{ form.tags.id_for_label }}" class="mb-1.5 block text-sm font-medium">
-        Tags
-      </label>
-      <input type="text" name="tags" id="{{ form.tags.id_for_label }}"
-             value="{{ form.tags.value|default:'' }}"
-             placeholder="drums, breakbeat, lo-fi"
-             class="bg-muted border-border w-full rounded-md border px-3 py-2 text-sm">
-      {% for error in form.tags.errors %}
-        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
-      {% endfor %}
-      <p class="text-muted-foreground mt-1 text-xs">Separate with commas. Ten maximum.</p>
-    </div>
+    
 
     <div>
       <label for="{{ form.folder.id_for_label }}" class="mb-1.5 block text-sm font-medium">

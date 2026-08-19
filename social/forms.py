@@ -73,16 +73,6 @@ class PublishForm(forms.ModelForm):
             }),
         }
 
-    # def clean_tags(self):
-    #     raw = self.cleaned_data.get("tags", "")
-    #     names = []
-    #     for part in raw.split(","):
-    #         name = part.strip().lower()
-    #         if name and name not in names:
-    #             names.append(name)
-    #     if len(names) > 10:
-    #         raise forms.ValidationError("Ten tags maximum.")
-    #     return names
 
 class CommentForm(forms.ModelForm):
     parent = forms.ModelChoiceField(

@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from library.models import SampleTag, Tag, TagSource, TagStatus
+from library.models import SampleTag, Tag, TagSource, TagStatus, Sample
 
 from .forms import CommentForm, DraftForm, PublishForm
 from .models import Comment, Like, Post
@@ -209,11 +209,16 @@ def publish_draft(request):
         # publication. Discarding them instead would mean the classifier
         # contributes nothing unless every chip is clicked, which penalises
         # the common case. Rejection remains an explicit act.
+        
+        
         SampleTag.objects.filter(
             sample=post.sample, status=TagStatus.SUGGESTED
         ).update(status=TagStatus.ACCEPTED)
         if not post.is_published:
             post.publish()
+            
+        post.sample.is_committed = True
+        post.sample.save(update_fields=["is_committed"])
 
     messages.success(request, "Posted.")
     return _client_redirect(request, "social:index")
@@ -243,7 +248,7 @@ def draft_tags(request, pk):
     post = get_object_or_404(
         Post.objects.select_related("sample"), pk=pk, author=request.user
     )
-    sample = post.sample
+    sample = sample = get_object_or_404(Sample.objects.in_library_of(request.user), pk=pk)
     action = request.POST.get("action")
     tag_pk = request.POST.get("tag_pk", "")
 
