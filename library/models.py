@@ -7,6 +7,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+
 AUDIO_EXTENSIONS = ["wav", "aiff", "aif", "aifc", "flac", "mp3"]
 
 
@@ -46,16 +47,9 @@ class SampleQuerySet(models.QuerySet):
             .distinct()
         )
 
-    def not_drafts(self):
-        """Exclude samples attached to an unpublished post.
-
-        A sample uploaded through the composer is filed the moment a file is
-        chosen, because analysis needs a row to attach to. Until the post is
-        published the user has not deliberately saved anything, so it should
-        not appear in their library. Samples with no post at all — uploaded
-        directly — are unaffected, since the join yields NULL.
-        """
-        return self.exclude(post__is_published=False)
+    def committed(self):
+        
+        return self.filter(is_committed=True)
 
     def with_metadata(self):
         return self.select_related("metadata")
@@ -200,9 +194,11 @@ class Sample(models.Model):
             )
         ],
     )
+    
     is_public = models.BooleanField(default=False)          # U2.7
     note = models.TextField(blank=True)                     # U2.6
     created_at = models.DateTimeField(auto_now_add=True)
+    is_committed = models.BooleanField(default=True)
 
     tags = models.ManyToManyField(
         "Tag", through="SampleTag", related_name="samples"
@@ -219,6 +215,18 @@ class Sample(models.Model):
     @property
     def owner(self):
         return self.folder.library.user
+    
+    @property
+    def has_published_post(self): 
+        post = getattr(self, "post", None)
+        return bool(post and post.is_published)
+
+    @property
+    def has_draft_post(self):
+        # getattr() works here because a reverse one-to-one raises
+        # RelatedObjectDoesNotExist, which subclasses AttributeError.
+        post = getattr(self, "post", None)
+        return bool(post and not post.is_published)
 
     def accepted_tags(self):
         """Tags the user has confirmed, or has not objected to.

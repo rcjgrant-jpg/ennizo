@@ -3,6 +3,7 @@ from django.urls import path
 
 from . import views
 
+
 app_name = "library"
 
 urlpatterns = [
@@ -13,5 +14,7 @@ urlpatterns = [
     path("folders/<int:pk>/samples/", views.folder_samples, name="folder_samples"),
     path("samples/<int:pk>/move/", views.move_sample, name="move_sample"),
     path("samples/<int:pk>/delete/", views.delete_sample, name="delete_sample"),
+    path("samples/<int:pk>/commit/", views.commit_sample, name="commit_sample"),
+    path("samples/<int:pk>/tags/", views.draft_tags, name="draft_tags"),
    
 ]

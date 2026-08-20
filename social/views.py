@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from library.models import SampleTag, Tag, TagSource, TagStatus
+from library.models import SampleTag, TagStatus
 
 from .forms import CommentForm, DraftForm, PublishForm
 from .models import Comment, Like, Post
@@ -125,12 +125,14 @@ def index(request):
     # filtering in place, so any composer left open elsewhere is abandoned.
     # htmx requests are excluded: tag filtering re-renders the feed while the
     # composer is still on screen above it.
-    if not request.headers.get("HX-Request"):
+    if not request.headers.get("HX-Request") and "draft" not in request.GET:
         Post.objects.drafts_for(request.user).discard()
 
     context = _feed_context(request)
     context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
     context["publish_form"] = PublishForm() if "compose" in request.GET else None
+    draft = Post.objects.drafts_for(request.user).select_related("sample__metadata").first()
+    context["draft"] = draft
 
     if request.headers.get("HX-Request"):
         return render(request, "social/partials/feed_root.html", context)
@@ -148,16 +150,29 @@ def create_draft(request):
         return render(request, "social/partials/composer_attach.html", {"form": form})
 
     with transaction.atomic():
-        # Attaching a second file supersedes the first; the old draft goes.
-        Post.objects.drafts_for(request.user).discard()
+        # Resolve the sample first: if it already carries a draft, that draft
+        # must survive the discard below, and discard() would otherwise delete
+        # an uncommitted sample along with it.
         sample = form.cleaned_data.get("sample") or form.build_sample()
-        post = Post.objects.create(author=request.user, sample=sample, body="")
+
+        # Attaching a second file supersedes the first; other drafts go.
+        Post.objects.drafts_for(request.user).exclude(sample=sample).discard()
+
+        # Post↔Sample is one-to-one: re-open an existing draft over creating
+        # a duplicate, which would raise IntegrityError.
+        post = getattr(sample, "post", None)
+        if post is None:
+            post = Post.objects.create(author=request.user, sample=sample, body="")
+
+    if not request.headers.get("HX-Request"):
+        # draft=1 stops the feed view's discard-on-navigation from deleting
+        # the draft this request just created.
+        return redirect(f"{reverse('social:index')}?compose=1&draft=1")
 
     return render(request, "social/partials/composer_draft.html", {
         "post": post,
         "sample": sample,
         "metadata": getattr(sample, "metadata", None),
-        "in_composer": True,
     })
 
 
@@ -171,7 +186,6 @@ def draft_state(request, pk):
         "post": post,
         "sample": post.sample,
         "metadata": getattr(post.sample, "metadata", None),
-        "in_composer": True,
     })
 
 
@@ -200,7 +214,6 @@ def publish_draft(request):
             "sample": post.sample,
             "metadata": getattr(post.sample, "metadata", None),
             "form": form,
-            "in_composer": True,
         })
 
     with transaction.atomic():
@@ -209,11 +222,16 @@ def publish_draft(request):
         # publication. Discarding them instead would mean the classifier
         # contributes nothing unless every chip is clicked, which penalises
         # the common case. Rejection remains an explicit act.
+        
+        
         SampleTag.objects.filter(
             sample=post.sample, status=TagStatus.SUGGESTED
         ).update(status=TagStatus.ACCEPTED)
         if not post.is_published:
             post.publish()
+            
+        post.sample.is_committed = True
+        post.sample.save(update_fields=["is_committed"])
 
     messages.success(request, "Posted.")
     return _client_redirect(request, "social:index")
@@ -232,57 +250,7 @@ def discard_draft(request):
     })
 
 
-@login_required
-def draft_tags(request, pk):
-    """Render the composer's tag panel, or act on it and re-render.
 
-    GET and POST share one view because every action ends the same way — the
-    panel redrawn from the database. Separate routes would differ only in the
-    two lines that mutate a row.
-    """
-    post = get_object_or_404(
-        Post.objects.select_related("sample"), pk=pk, author=request.user
-    )
-    sample = post.sample
-    action = request.POST.get("action")
-    tag_pk = request.POST.get("tag_pk", "")
-
-    if action == "add":
-        name = (request.POST.get("tag_name") or "").strip().lower()[:100]
-        if name and len(sample.accepted_tags()) < 10:
-            # Hand-typed tags are subjective by definition; the deterministic
-            # pipeline is what produces objective ones.
-            tag, _ = Tag.objects.get_or_create(
-                name=name, defaults={"kind": Tag.Kind.SUBJECTIVE}
-            )
-            row, created = SampleTag.objects.get_or_create(
-                sample=sample, tag=tag,
-                defaults={"source": TagSource.USER, "status": TagStatus.ACCEPTED},
-            )
-            if not created:
-                # Typing a tag the machine suggested, or one previously
-                # rejected, counts as accepting it. Source is preserved, so
-                # the prediction still records as a hit.
-                row.accept()
-
-    elif action in ("keep", "remove") and tag_pk.isdigit():
-        row = get_object_or_404(SampleTag, pk=tag_pk, sample=sample)
-        # Rejected rows are kept rather than deleted: rejection rate per label
-        # is the accuracy measure for the analysis pipeline. accept()/reject()
-        # also stamp resolved_at, which writing status directly would not.
-        row.accept() if action == "keep" else row.reject()
-
-    # Which chip is expanded, and whether the new-tag cell is showing, are
-    # read from the query string rather than held in the browser. Same
-    # principle as the feed's tag filter: the server owns what is displayed.
-    open_raw = request.GET.get("open", "")
-
-    return render(request, "social/partials/draft_tags.html", {
-        "post": post,
-        "sample": sample,
-        "open_pk": int(open_raw) if open_raw.isdigit() else 0,
-        "adding": request.GET.get("adding") == "1",
-    })
 
 
 @login_required

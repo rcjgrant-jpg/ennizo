@@ -13,6 +13,14 @@
           class="bg-card border-border mb-4 rounded-xl border p-4">
       {% csrf_token %}
 
+      <header class="mb-3 flex items-center gap-3">
+        <div class="bg-muted h-9 w-9 shrink-0 rounded-full"></div>
+        <div>
+          <p class="text-sm font-medium">{{ request.user }}</p>
+          <p class="text-muted-foreground text-xs">{% if draft %}Draft{% else %}New post{% endif %}</p>
+        </div>
+      </header>
+
       {% if publish_form.non_field_errors %}
         <div class="text-destructive mb-3 text-xs">
           {% for error in publish_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
@@ -21,16 +29,19 @@
 
       {{ publish_form.body }}
 
-      {% include "social/partials/composer_attach.html" %}
+      {% if draft %}
+        {% include "social/partials/composer_draft.html" with post=draft sample=draft.sample metadata=draft.sample.metadata %}
+      {% else %}
+        {% include "social/partials/composer_attach.html" %}
+      {% endif %}
 
       <div class="mt-4 flex items-center gap-2">
         <a href="{% url 'library:record' %}"
            class="bg-muted rounded-md px-3 py-1.5 text-xs">Record</a>
         <a href="{% url 'library:upload' %}"
            class="text-muted-foreground text-xs">Upload without posting</a>
-        <button type="submit" id="composer-post"
-                class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40"
-                disabled>
+        <button class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40"
+            {% if not draft %}disabled{% endif %}>
           Post
         </button>
       </div>

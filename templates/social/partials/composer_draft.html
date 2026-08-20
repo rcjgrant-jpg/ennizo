@@ -1,6 +1,7 @@
- <div id="composer-attach"
+
+<div id="composer-attach"
      class="border-border mt-3 space-y-3 border-t pt-3"
-     {% if metadata.is_running %}
+     {% if not metadata or metadata.is_running %}
        hx-get="{% url 'social:draft_state' post.pk %}"
        hx-trigger="every 2s"
        hx-target="#composer-attach"
@@ -9,32 +10,62 @@
 
   <input type="hidden" name="draft_pk" value="{{ post.pk }}" form="composer-form">
 
-  <div class="flex items-center justify-between">
-    <p class="text-xs font-medium">{{ sample.title }}</p>
+  <div class="bg-muted flex items-center gap-3 rounded-lg p-3">
+    {% if not metadata or metadata.is_running %}
+      <div class="grid h-8 w-8 shrink-0 place-items-center">
+        <div class="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/70"></div>
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium">{{ sample.title }}</p>
+        <p class="text-muted-foreground text-xs">Analysing…</p>
+      </div>
+    {% elif metadata.has_failed %}
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium">{{ sample.title }}</p>
+        <p class="text-destructive text-xs">Analysis failed —
+          <a href="{% url 'analysis:sample_analysis' sample.pk %}" class="underline">details</a>
+        </p>
+      </div>
+    {% else %}
+      <button type="button"
+              data-audio-src="{{ sample.audio_file.url }}"
+              class="bg-primary text-primary-foreground grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs">
+        &#9654;
+      </button>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium">{{ sample.title }}</p>
+        <p class="text-muted-foreground text-xs">
+          {% if metadata.bpm_display %}{{ metadata.bpm_display }} BPM{% endif %}
+          {% if metadata.bpm_display and metadata.duration_display %} · {% endif %}
+          {{ metadata.duration_display }}
+        </p>
+      </div>
+    {% endif %}
     <button type="button"
             hx-post="{% url 'social:discard_draft' %}"
             hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
             hx-target="#composer-attach"
             hx-swap="outerHTML"
-            class="text-muted-foreground text-xs hover:underline">
+            class="text-muted-foreground shrink-0 text-xs hover:underline">
       Replace
     </button>
   </div>
 
-  {% include "analysis/_analysis_state.html" %}
-
-  {% comment %}Withheld while analysis runs: the 2s poll replaces this whole
-  region, which would wipe a half-typed tag.{% endcomment %}
-  {% if not metadata.is_running %}
-    {% include "social/partials/draft_tags.html" %}
+  {% if sample.accepted_tags or sample.suggested_tags %}
+    {# Locked in: review happens on the analysis page, not here. Suggested   #}
+    {# tags render identically to accepted ones because publish accepts them. #}
+    <div class="flex flex-wrap items-center gap-1.5">
+      {% for st in sample.accepted_tags %}
+        <span class="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs">#{{ st.tag.name }}</span>
+      {% endfor %}
+      {% for st in sample.suggested_tags %}
+        <span class="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs">#{{ st.tag.name }}</span>
+      {% endfor %}
+      {% if not sample.is_committed %}
+        <a href="{% url 'analysis:sample_analysis' sample.pk %}"
+           class="text-primary text-xs hover:underline">Review tags</a>
+      {% endif %}
+    </div>
   {% endif %}
 
 </div>
-
-{% comment %}Out-of-band: the Post button lives outside this fragment's swap
-target, so its enabled state is updated from the same response.{% endcomment %}
-<button type="submit" id="composer-post" hx-swap-oob="true"
-        class="bg-primary text-primary-foreground ml-auto rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40"
-        {% if metadata.is_running %}disabled{% endif %}>
-  Post
-</button>

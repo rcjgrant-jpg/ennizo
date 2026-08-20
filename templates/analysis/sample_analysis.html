@@ -13,6 +13,11 @@
     </p>
   </div>
   
+  
+  
+
+  {% include "library/partials/action_bar.html" with sample=sample show_edit=True csrf_token=csrf_token only %}
+  
   {% include "analysis/_analysis_state.html" %}
 
 </div>

@@ -13,15 +13,15 @@
         <span class="bg-primary/15 text-primary ring-primary/40 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs ring-1">
           {{ st.tag.name }}
           <button type="button" class="font-medium hover:underline"
-                  hx-post="{% url 'social:draft_tags' post.pk %}"
+                  hx-post="{% url 'library:draft_tags' sample.pk %}"
                   hx-vals='{"action": "keep", "tag_pk": "{{ st.pk }}"}'>Keep</button>
           <button type="button" class="font-medium hover:underline"
-                  hx-post="{% url 'social:draft_tags' post.pk %}"
+                  hx-post="{% url 'library:draft_tags' sample.pk %}"
                   hx-vals='{"action": "remove", "tag_pk": "{{ st.pk }}"}'>Remove</button>
         </span>
       {% else %}
         <button type="button"
-                hx-get="{% url 'social:draft_tags' post.pk %}?open={{ st.pk }}"
+                hx-get="{% url 'library:draft_tags' sample.pk %}?open={{ st.pk }}"
                 class="bg-primary/10 text-primary ring-primary/25 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1">
           {{ st.tag.name }}
           <span class="opacity-60">suggested</span>
@@ -34,12 +34,12 @@
         <span class="bg-muted text-muted-foreground inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs">
           {{ st.tag.name }}
           <button type="button" class="font-medium hover:underline"
-                  hx-post="{% url 'social:draft_tags' post.pk %}"
+                  hx-post="{% url 'library:draft_tags' sample.pk %}"
                   hx-vals='{"action": "remove", "tag_pk": "{{ st.pk }}"}'>Remove</button>
         </span>
       {% else %}
         <button type="button"
-                hx-get="{% url 'social:draft_tags' post.pk %}?open={{ st.pk }}"
+                hx-get="{% url 'library:draft_tags' sample.pk %}?open={{ st.pk }}"
                 class="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs">
           {{ st.tag.name }}
         </button>
@@ -53,15 +53,15 @@
                onkeydown="if(event.key==='Enter'){event.preventDefault();}"
                class="text-foreground w-24 bg-transparent outline-none">
         <button type="button" class="text-primary font-medium hover:underline"
-                hx-post="{% url 'social:draft_tags' post.pk %}"
+                hx-post="{% url 'library:draft_tags' sample.pk %}"
                 hx-vals='{"action": "add"}'
                 hx-include="#tag-add">Add</button>
         <button type="button" title="Cancel" class="text-muted-foreground hover:text-foreground"
-                hx-get="{% url 'social:draft_tags' post.pk %}">&times;</button>
+                hx-get="{% url 'library:draft_tags' sample.pk %}">&times;</button>
       </span>
     {% else %}
       <button type="button" title="Add a tag"
-              hx-get="{% url 'social:draft_tags' post.pk %}?adding=1"
+              hx-get="{% url 'library:draft_tags' sample.pk %}?adding=1"
               class="border-border text-muted-foreground hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded-full border border-dashed text-sm leading-none">+</button>
     {% endif %}
 

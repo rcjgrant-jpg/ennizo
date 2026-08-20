@@ -76,24 +76,3 @@ def retry_analysis(request, pk):
     if not request.headers.get("HX-Request"):
         return redirect("analysis:sample_analysis", pk=sample.pk)
     return render(request, "analysis/_analysis_state.html", _page_context(request, sample))
-
-
-@login_required
-@require_POST
-def publish_post(request, pk):
-    sample = _get_owned_sample(request, pk)
-    metadata = getattr(sample, "metadata", None)
-
-    if metadata is None or not metadata.is_analysed:
-        return redirect("analysis:sample_analysis", pk=sample.pk)
-
-    try:
-        post = sample.post
-    except Post.DoesNotExist:
-        return redirect("analysis:sample_analysis", pk=sample.pk)
-
-    if not post.is_published:
-        post.publish()
-
-    return redirect("social:index")
-

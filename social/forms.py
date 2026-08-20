@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from django import forms
+from django.db.models import Q
 
 from library.models import Folder, Sample
 
@@ -16,7 +17,7 @@ class DraftForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.user = user
         self.fields["sample"].queryset = Sample.objects.in_library_of(user).filter(
-            post__isnull=True
+            Q(post__isnull=True) | Q(post__is_published=False)
         )
 
     def clean_audio_file(self):
@@ -52,6 +53,7 @@ class DraftForm(forms.Form):
             title=Path(upload.name).stem,
             audio_file=upload,
             is_public=True,
+            is_committed=False,
         )
         sample.save()
         return sample
@@ -72,16 +74,6 @@ class PublishForm(forms.ModelForm):
             }),
         }
 
-    def clean_tags(self):
-        raw = self.cleaned_data.get("tags", "")
-        names = []
-        for part in raw.split(","):
-            name = part.strip().lower()
-            if name and name not in names:
-                names.append(name)
-        if len(names) > 10:
-            raise forms.ValidationError("Ten tags maximum.")
-        return names
 
 class CommentForm(forms.ModelForm):
     parent = forms.ModelChoiceField(
