@@ -13,6 +13,14 @@
           class="bg-card border-border mb-4 rounded-xl border p-4">
       {% csrf_token %}
 
+      <header class="mb-3 flex items-center gap-3">
+        <div class="bg-muted h-9 w-9 shrink-0 rounded-full"></div>
+        <div>
+          <p class="text-sm font-medium">{{ request.user }}</p>
+          <p class="text-muted-foreground text-xs">{% if draft %}Draft{% else %}New post{% endif %}</p>
+        </div>
+      </header>
+
       {% if publish_form.non_field_errors %}
         <div class="text-destructive mb-3 text-xs">
           {% for error in publish_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}

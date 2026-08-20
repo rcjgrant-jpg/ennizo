@@ -173,7 +173,6 @@ def create_draft(request):
         "post": post,
         "sample": sample,
         "metadata": getattr(sample, "metadata", None),
-        "in_composer": True,
     })
 
 
@@ -187,7 +186,6 @@ def draft_state(request, pk):
         "post": post,
         "sample": post.sample,
         "metadata": getattr(post.sample, "metadata", None),
-        "in_composer": True,
     })
 
 
@@ -216,7 +214,6 @@ def publish_draft(request):
             "sample": post.sample,
             "metadata": getattr(post.sample, "metadata", None),
             "form": form,
-            "in_composer": True,
         })
 
     with transaction.atomic():
