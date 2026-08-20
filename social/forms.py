@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from django import forms
+from django.db.models import Q
 
 from library.models import Folder, Sample
 
@@ -15,8 +16,11 @@ class DraftForm(forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        # A sample with a draft post is attachable — the view re-opens that
+        # draft rather than creating a second one. Only published posts make
+        # a sample ineligible, since Post↔Sample is one-to-one.
         self.fields["sample"].queryset = Sample.objects.in_library_of(user).filter(
-            post__isnull=True
+            Q(post__isnull=True) | Q(post__is_published=False)
         )
 
     def clean_audio_file(self):

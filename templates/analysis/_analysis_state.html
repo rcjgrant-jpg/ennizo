@@ -43,47 +43,7 @@
 
 {% else %}
 
-  {{ metadata.peaks|json_script:"peaks-data" }}
-
-  <div class="rounded-xl border border-white/10 bg-white/5 p-5">
-    <div id="waveform" data-audio="{{ sample.audio_file.url }}"></div>
-    <div class="mt-4 flex items-center gap-4">
-      <button id="wave-play" type="button"
-              class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Play</button>
-      <span class="text-sm text-white/50">{{ metadata.duration_display }}</span>
-    </div>
-  </div>
-
-  <script>
-    (function () {
-      const container = document.getElementById("waveform");
-      const peaksEl = document.getElementById("peaks-data");
-      if (!container || !peaksEl || !window.WaveSurfer) return;
-
-      if (window.ennizoWave) { window.ennizoWave.destroy(); }
-
-      window.ennizoWave = WaveSurfer.create({
-        container: container,
-        url: container.dataset.audio,
-        peaks: [JSON.parse(peaksEl.textContent)],
-        duration: {{ metadata.duration_seconds|default:0 }},
-        height: 96,
-        waveColor: "rgba(255,255,255,0.35)",
-        progressColor: "#8b5cf6",
-        cursorColor: "rgba(255,255,255,0.6)",
-        barWidth: 2,
-        barGap: 1,
-        barRadius: 2,
-      });
-
-      const button = document.getElementById("wave-play");
-      if (button) {
-        button.addEventListener("click", () => window.ennizoWave.playPause());
-        window.ennizoWave.on("play", () => button.textContent = "Pause");
-        window.ennizoWave.on("pause", () => button.textContent = "Play");
-      }
-    })();
-  </script>
+  {% include "analysis/_waveform.html" %}
 
   <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
     <div class="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -128,17 +88,6 @@
   {% endif %}
 
   {% include "library/partials/draft_tags.html" %}
-
-  {% if is_owner and post and not post.is_published and not in_composer %}
-    <form method="post" action="{% url 'analysis:publish_post' sample.pk %}" class="mt-6">
-      {% csrf_token %}
-      <button type="submit"
-              class="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium hover:bg-violet-500">
-        Confirm and post
-      </button>
-    </form>
-  {% endif %}
-
 
 {% endif %}
 

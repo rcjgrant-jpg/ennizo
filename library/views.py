@@ -164,7 +164,14 @@ def commit_sample(request, pk):
     sample = get_object_or_404(Sample.objects.in_library_of(request.user), pk=pk)
     sample.is_committed = True
     sample.save(update_fields=["is_committed"])
-    return redirect("library:index")
+
+    if not request.headers.get("HX-Request"):
+        return redirect("analysis:sample_analysis", pk=sample.pk)
+
+    return render(request, "library/partials/action_bar.html", {
+        "sample": sample,
+        "show_edit": True,
+    })
         
 
 @login_required

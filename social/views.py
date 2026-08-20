@@ -125,12 +125,14 @@ def index(request):
     # filtering in place, so any composer left open elsewhere is abandoned.
     # htmx requests are excluded: tag filtering re-renders the feed while the
     # composer is still on screen above it.
-    if not request.headers.get("HX-Request"):
+    if not request.headers.get("HX-Request") and "draft" not in request.GET:
         Post.objects.drafts_for(request.user).discard()
 
     context = _feed_context(request)
     context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
     context["publish_form"] = PublishForm() if "compose" in request.GET else None
+    draft = Post.objects.drafts_for(request.user).select_related("sample__metadata").first()
+    context["draft"] = draft
 
     if request.headers.get("HX-Request"):
         return render(request, "social/partials/feed_root.html", context)
@@ -148,10 +150,24 @@ def create_draft(request):
         return render(request, "social/partials/composer_attach.html", {"form": form})
 
     with transaction.atomic():
-        # Attaching a second file supersedes the first; the old draft goes.
-        Post.objects.drafts_for(request.user).discard()
+        # Resolve the sample first: if it already carries a draft, that draft
+        # must survive the discard below, and discard() would otherwise delete
+        # an uncommitted sample along with it.
         sample = form.cleaned_data.get("sample") or form.build_sample()
-        post = Post.objects.create(author=request.user, sample=sample, body="")
+
+        # Attaching a second file supersedes the first; other drafts go.
+        Post.objects.drafts_for(request.user).exclude(sample=sample).discard()
+
+        # Post↔Sample is one-to-one: re-open an existing draft over creating
+        # a duplicate, which would raise IntegrityError.
+        post = getattr(sample, "post", None)
+        if post is None:
+            post = Post.objects.create(author=request.user, sample=sample, body="")
+
+    if not request.headers.get("HX-Request"):
+        # draft=1 stops the feed view's discard-on-navigation from deleting
+        # the draft this request just created.
+        return redirect(f"{reverse('social:index')}?compose=1&draft=1")
 
     return render(request, "social/partials/composer_draft.html", {
         "post": post,

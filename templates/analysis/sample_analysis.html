@@ -14,15 +14,9 @@
   </div>
   
   
-  {% if not sample.is_committed %}
-      <form method="post" action="{% url 'library:commit_sample' sample.pk %}" class="mt-6">
-        {% csrf_token %}
-        <button type="submit" 
-              class="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium hover:bg-violet-500">
-              Save to library
-            </button>
-      </form>
-  {% endif %}
+  
+
+  {% include "library/partials/action_bar.html" with sample=sample show_edit=True csrf_token=csrf_token only %}
   
   {% include "analysis/_analysis_state.html" %}
 
