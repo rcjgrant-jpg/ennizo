@@ -1,0 +1,71 @@
+{% extends "base_app.html" %}
+{% block content %}
+  {% include "partials/_waveform.html" with with_media=True %}
+ {{ eq_bands|json_script:"eq-bands" }}
+
+  <div id="eq-panel" class="mt-4 rounded-xl border border-white/10 bg-white/5 p-5">
+    <div class="flex items-end justify-between gap-2">
+     {% for band in eq_bands %}
+        <div class="flex flex-col items-center gap-2">
+            <input type="range"
+                    class="eq-slider"
+                    data-band="{{ forloop.counter0 }}"
+                    min="-12" max="12" step="0.5" value="0"
+                    style="writing-mode: vertical-lr; direction: rtl; height: 8rem;">
+            <span class="text-xs text-white/40">
+            {% if band >= 1000 %}{{ band|floatformat:0|slice:":-3" }}k{% else %}{{ band }}{% endif %}
+            </span>
+            </div>
+    {% endfor %}
+    </div>
+  </div>
+
+  <script>
+    (function () {
+
+        if (!window.ennizoMedia) return;
+
+        const ctx = new AudioContext();
+        const source = ctx.createMediaElementSource(window.ennizoMedia)
+
+        const frequencies = JSON.parse(document.getElementById("eq-bands").textContent);
+    
+        const filters = frequencies.map((freq, index) => {
+           const filter = ctx.createBiquadFilter();
+           filter.type = "peaking";
+           filter.frequency.value = freq;
+           filter.Q.value = 1
+           filter.gain.value = 0;
+           return filter;
+        });
+        
+        source.connect(filters[0]);
+        for (let i = 0; i < filters.length - 1; i ++) {
+            filters[i].connect(filters[i + 1]);
+        }
+        filters[filters.length - 1].connect(ctx.destination);
+
+        window.ennizoEQ = filters;
+
+        window.ennizoMedia.addEventListener("play", () => {
+            if (ctx.state === "suspended") ctx.resume();
+        });
+
+        const sliders = document.querySelectorAll(".eq-slider")
+
+        sliders.forEach((slider) => {
+
+            slider.addEventListener("input", () => {
+
+                const index = parseInt(slider.dataset.band);
+                const gain = parseFloat(slider.value);
+                filters[index].gain.value = gain;
+
+            });
+
+        });
+
+    })();
+  </script>
+
+{% endblock %}

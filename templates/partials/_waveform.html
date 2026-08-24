@@ -1,5 +1,8 @@
-{# Waveform player. Pure display: expects `sample` and an analysed `metadata` in context. #}
-{# Single instance per page: fixed #waveform / #peaks-data ids and the window.ennizoWave global. #}
+{# Waveform player. Pure display: expects `sample` and analysed `metadata`.   #}
+{# Optional flag `with_media`: when true, backs WaveSurfer with an <audio>    #}
+{# element exposed as window.ennizoMedia so the page can route it through a   #}
+{# Web Audio graph (used by the editor's EQ). Default (absent/false) keeps    #}
+{# the original self-contained behaviour for the analysis page.               #}
 
 {{ metadata.peaks|json_script:"peaks-data" }}
 
@@ -19,10 +22,10 @@
     if (!container || !peaksEl || !window.WaveSurfer) return;
 
     if (window.ennizoWave) { window.ennizoWave.destroy(); }
+    if (window.ennizoMedia) { window.ennizoMedia.remove(); window.ennizoMedia = null; }
 
-    window.ennizoWave = WaveSurfer.create({
+    const options = {
       container: container,
-      url: container.dataset.audio,
       peaks: [JSON.parse(peaksEl.textContent)],
       duration: {{ metadata.duration_seconds|default:0 }},
       height: 96,
@@ -32,7 +35,19 @@
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
-    });
+    };
+
+    {% if with_media %}
+      const media = new Audio();
+      media.crossOrigin = "anonymous";
+      media.src = container.dataset.audio;
+      window.ennizoMedia = media;
+      options.media = media;
+    {% else %}
+      options.url = container.dataset.audio;
+    {% endif %}
+
+    window.ennizoWave = WaveSurfer.create(options);
 
     const button = document.getElementById("wave-play");
     if (button) {
