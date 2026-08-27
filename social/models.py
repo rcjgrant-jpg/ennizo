@@ -1,4 +1,3 @@
-# social/models.py
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
@@ -19,21 +18,6 @@ class PostQuerySet(models.QuerySet):
             return self.published()
         return self.filter(Q(is_published=True) | Q(author=user))
 
-    def stale_drafts(self, older_than_days=7):
-        cutoff = timezone.now() - timezone.timedelta(days=older_than_days)
-        return self.filter(is_published=False, created_at__lt=cutoff)
-
-    def discard(self):
-        """Delete these drafts together with their samples and audio files.
-        """
-        count = 0
-        for post in self.filter(sample__is_committed=False).select_related("sample"):
-            sample = post.sample
-            post.delete()
-            sample.delete()
-            count += 1
-        return count
-
 
 class Post(models.Model):
     author = models.ForeignKey(
@@ -41,6 +25,9 @@ class Post(models.Model):
         on_delete=models.CASCADE,
         related_name="posts",
     )
+    # PROTECT so a published post guards its audio: delete_sample surfaces
+    # this as a friendly error. Draft posts do not shield their samples —
+    # Sample.delete() removes the draft before the row goes.
     sample = models.OneToOneField(
         "library.Sample",
         on_delete=models.PROTECT,

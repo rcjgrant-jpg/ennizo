@@ -4,7 +4,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import RegisterForm
 from library.models import Sample
-from social.models import Post
 
 User = get_user_model()
 
@@ -24,10 +23,6 @@ def register(request):
     return render(request, "registration/register.html", {"form": form})
 
 def profile(request, username):
-    # Navigating here means the composer was left without publishing.
-    if request.user.is_authenticated:
-        Post.objects.drafts_for(request.user).discard()
-
     profile_user = get_object_or_404(User, username=username)
     is_own = request.user == profile_user
     samples = (
@@ -48,8 +43,6 @@ def profile(request, username):
 
 @login_required
 def settings(request):
-    Post.objects.drafts_for(request.user).discard()
-
     return render(request, "accounts/settings.html", {
         "active_page": "settings",
     })

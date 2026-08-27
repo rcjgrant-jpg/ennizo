@@ -15,6 +15,9 @@ ANALYSIS_SR = 22050
 
 PITCH_CLASSES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
+# Essentia reports sharps; but Ennizo uses flats. 
+ENHARMONIC = {"C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab", "A#": "Bb"}
+
 # Threshold on Essentia's key strength. Higher than the old margin-based
 # threshold because the two measure different things — see _detect_key.
 # Calibrated against the labelled evaluation set.
@@ -92,8 +95,12 @@ def _detect_key(y, sr):
 
         extractor = es.KeyExtractor(profileType=KEY_PROFILE, sampleRate=KEY_SR)
         key, scale, strength = extractor(audio)
+        
     except Exception:
+        
         return None, "", None
+
+    key = ENHARMONIC.get(key, key)
 
     if key not in PITCH_CLASSES:
         logger.warning("Unrecognised key name from Essentia: %r", key)

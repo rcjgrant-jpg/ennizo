@@ -10,13 +10,22 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from library.models import SampleTag, TagStatus
+from library.models import Sample, SampleTag, TagStatus
 
 from .forms import CommentForm, DraftForm, PublishForm
 from .models import Comment, Like, Post
 
 
 # --- helpers -----------------------------------------------------------------
+
+def _discard_drafts(drafts):
+    """Remove draft posts. Uncommitted samples go with them (all sample
+    deletion flows through Sample.delete); committed samples keep their
+    audio and merely lose the draft riding on them."""
+    Sample.objects.filter(post__in=drafts).discard()
+    drafts.delete()
+
+
 
 def _selected_tags(request):
     """Normalised, de-duplicated list of tag names from the query string."""
@@ -121,13 +130,6 @@ def _comments_context(post, form):
 
 @login_required
 def index(request):
-    # A full page load of the feed means the user navigated here rather than
-    # filtering in place, so any composer left open elsewhere is abandoned.
-    # htmx requests are excluded: tag filtering re-renders the feed while the
-    # composer is still on screen above it.
-    if not request.headers.get("HX-Request") and "draft" not in request.GET:
-        Post.objects.drafts_for(request.user).discard()
-
     context = _feed_context(request)
     context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
     context["publish_form"] = PublishForm() if "compose" in request.GET else None
@@ -150,13 +152,12 @@ def create_draft(request):
         return render(request, "social/partials/composer_attach.html", {"form": form})
 
     with transaction.atomic():
-        # Resolve the sample first: if it already carries a draft, that draft
-        # must survive the discard below, and discard() would otherwise delete
-        # an uncommitted sample along with it.
+        # Resolve the sample first: if it already carries a draft, that
+        # draft must survive the supersede below.
         sample = form.cleaned_data.get("sample") or form.build_sample()
 
         # Attaching a second file supersedes the first; other drafts go.
-        Post.objects.drafts_for(request.user).exclude(sample=sample).discard()
+        _discard_drafts(Post.objects.drafts_for(request.user).exclude(sample=sample))
 
         # Post↔Sample is one-to-one: re-open an existing draft over creating
         # a duplicate, which would raise IntegrityError.
@@ -165,9 +166,7 @@ def create_draft(request):
             post = Post.objects.create(author=request.user, sample=sample, body="")
 
     if not request.headers.get("HX-Request"):
-        # draft=1 stops the feed view's discard-on-navigation from deleting
-        # the draft this request just created.
-        return redirect(f"{reverse('social:index')}?compose=1&draft=1")
+        return redirect(f"{reverse('social:index')}?compose=1")
 
     return render(request, "social/partials/composer_draft.html", {
         "post": post,
@@ -244,7 +243,7 @@ def publish_draft(request):
 @require_POST
 def discard_draft(request):
     """Throw away the current draft and return the empty attach control."""
-    Post.objects.drafts_for(request.user).discard()
+    _discard_drafts(Post.objects.drafts_for(request.user))
     return render(request, "social/partials/composer_attach.html", {
         "form": DraftForm(user=request.user),
     })

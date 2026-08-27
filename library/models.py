@@ -95,19 +95,27 @@ class SampleQuerySet(models.QuerySet):
             Q(metadata__isnull=True) | Q(metadata__status__in=["pending", "failed"])
         )
         
-    def reap_uncommitted(self, older_than_minutes=30):
-        """Delete abandoned samples together with their audio files."""
+    def discard(self):
+        """Delete uncommitted samples in bulk: audio files and any draft
+        posts go with them (see Sample.delete, the single teardown path).
 
-        cutoff = timezone.now() - timedelta(minutes=older_than_minutes)
+        The is_committed filter is the safety net — whatever queryset the
+        caller passes, committed samples are never deleted implicitly.
+        """
         count = 0
-        for sample in self.filter(
-            is_committed=False,
-            post__isnull=True,
-            last_active_at__lt=cutoff,
-        ):
+        for sample in self.filter(is_committed=False):
             sample.delete()
             count += 1
         return count
+
+    def reap_uncommitted(self, older_than_minutes=30):
+        """Discard abandoned samples: uncommitted and inactive past the lease.
+
+        Carrying a draft post no longer shields a sample — the draft is
+        provisional state riding on the sample and is torn down with it.
+        """
+        cutoff = timezone.now() - timedelta(minutes=older_than_minutes)
+        return self.filter(last_active_at__lt=cutoff).discard()
 
 
 class Folder(models.Model):
@@ -275,3 +283,16 @@ class Sample(models.Model):
         if meta is None or not meta.is_analysed:
             return None
         return meta.effective_bpm
+    
+    def delete(self, *args, **kwargs):
+        """The single teardown path for a sample.
+
+        Every deletion route — the analysis-page discard button, the library
+        delete, the reaper, the composer's supersede — ends here, so file
+        cleanup and draft teardown are written once.
+        """
+        post = getattr(self, "post", None)
+        if post is not None and not post.is_published:
+            post.delete()
+        self.audio_file.delete(save=False)
+        return super().delete(*args, **kwargs)
