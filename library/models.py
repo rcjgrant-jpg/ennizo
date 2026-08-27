@@ -203,6 +203,14 @@ class Sample(models.Model):
     tags = models.ManyToManyField(
         "Tag", through="SampleTag", related_name="samples"
     )
+    
+    rendered_from = models.ForeignKey(
+    "self",
+    null=True,
+    blank=True,
+    on_delete=models.SET_NULL,
+    related_name="renders",
+    )
 
     objects = SampleQuerySet.as_manager()
 

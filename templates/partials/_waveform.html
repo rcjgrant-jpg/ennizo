@@ -40,7 +40,9 @@
     {% if with_media %}
       const media = new Audio();
       media.crossOrigin = "anonymous";
-      media.src = container.dataset.audio;
+      fetch(container.dataset.audio)
+        .then((resp) => resp.blob())
+        .then((blob) => { media.src = URL.createObjectURL(blob); });
       window.ennizoMedia = media;
       options.media = media;
     {% else %}

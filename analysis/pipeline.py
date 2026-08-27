@@ -41,31 +41,6 @@ def _container_facts(path):
     }
 
 
-# def _compute_peaks(y, buckets=PEAK_BUCKETS):
-#     """Interleaved [min, max, min, max, ...] normalised to -1..1.
-
-#     Interleaved rather than absolute values so wavesurfer draws a symmetric
-#     waveform; absolute values render as a top-half-only shape.
-#     """
-#     if y.size == 0:
-#         return []
-
-#     peak = float(np.max(np.abs(y))) or 1.0
-#     usable = (y.size // buckets) * buckets
-#     if usable < buckets:
-#         return [round(float(v) / peak, 4) for v in y]
-
-#     frames = y[:usable].reshape(buckets, -1)
-#     mins = frames.min(axis=1) / peak
-#     maxs = frames.max(axis=1) / peak
-
-#     out = np.empty(buckets * 2, dtype=np.float32)
-#     out[0::2] = mins
-#     out[1::2] = maxs
-#     # Plain Python floats — numpy scalars are not JSON-serialisable.
-#     return [round(float(v), 4) for v in out]
-
-
 def _detect_tempo(y, sr, duration):
     """Returns (bpm, confidence in 0-1)."""
     if duration < 2.0:
@@ -129,35 +104,6 @@ def _detect_key(y, sr):
     confidence = round(float(np.clip(strength, 0.0, 1.0)), 3)
 
     return tonic, mode, confidence
-    
-
-
-# def _quality_flags(y, sr, facts, duration):
-#     peak = float(np.max(np.abs(y))) if y.size else 0.0
-#     clipped = int(np.sum(np.abs(y) >= 0.99))
-#     dc = float(np.mean(y)) if y.size else 0.0
-
-#     leading_silence = False
-#     trailing_silence = False
-#     if y.size:
-#         try:
-#             _, (start, end) = librosa.effects.trim(y, top_db=40)
-#             leading_silence = (int(start) / sr) > 0.25
-#             trailing_silence = ((y.size - int(end)) / sr) > 0.25
-#         except Exception:
-#             pass
-
-#     # bool() at the boundary: NumPy comparisons return np.bool_, which is not
-#     # JSON-serialisable. Every value leaving this module is a builtin type.
-#     return {
-#         "clipping": bool(clipped > (y.size * 0.0001)),
-#         "very_quiet": bool(peak < 0.1),
-#         "dc_offset": bool(abs(dc) > 0.01),
-#         "low_sample_rate": bool(facts["sample_rate"] < 44100),
-#         "too_short_for_tempo": bool(duration < 2.0),
-#         "leading_silence": bool(leading_silence),
-#         "trailing_silence": bool(trailing_silence),
-#     }
 
 
 def analyse(path):

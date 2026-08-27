@@ -1,5 +1,8 @@
 {% extends "base_app.html" %}
 {% block content %}
+
+<script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+
   {% include "partials/_waveform.html" with with_media=True %}
  {{ eq_bands|json_script:"eq-bands" }}
 
@@ -20,7 +23,15 @@
     </div>
   </div>
 
+    <button id="render-button" type="button"
+        class="mt-4 bg-primary text-primary-foreground rounded-md px-5 py-2 text-sm font-semibold">
+    Confirm edit
+    </button>
+
   <script>
+
+    let trimRegion = null;
+
     (function () {
 
         if (!window.ennizoMedia) return;
@@ -51,6 +62,21 @@
             if (ctx.state === "suspended") ctx.resume();
         });
 
+        window.ennizoMedia.addEventListener("play", () => {
+            if (!trimRegion) return;
+            if (window.ennizoMedia.currentTime < trimRegion.start ||
+                window.ennizoMedia.currentTime >= trimRegion.end) {
+                window.ennizoMedia.currentTime = trimRegion.start;
+            }
+        });
+
+        window.ennizoMedia.addEventListener("timeupdate", () => {
+            if (!trimRegion) return;
+            if (!window.ennizoMedia.paused && window.ennizoMedia.currentTime >= trimRegion.end) {
+                window.ennizoMedia.pause();
+            }
+            });
+
         const sliders = document.querySelectorAll(".eq-slider")
 
         sliders.forEach((slider) => {
@@ -66,6 +92,55 @@
         });
 
     })();
+
+    const regions = window.ennizoWave.registerPlugin(WaveSurfer.Regions.create());
+    window.ennizoRegions = regions;
+
+    function addInitialRegion() { 
+
+        trimRegion = regions.addRegion({
+            start: 0,
+            end: window.ennizoWave.getDuration(),
+            color: "rgba(139, 92, 246, 0.15)",   
+            drag: true,
+            resize: true,
+            });
+
+     }
+    
+    if (window.ennizoWave.getDuration() > 0) { addInitialRegion(); }
+    else { window.ennizoWave.on("ready", addInitialRegion); }
+
+    regions.on("region-updated", (region) => {
+        console.log("trim", region.start, region.end);
+        });
+
+    const btn = document.getElementById("render-button");
+    
+    btn.addEventListener("click", () => {
+        btn.disabled = true;
+        btn.textContent = "Rendering…";
+        const params = {
+            trim_start: trimRegion ? trimRegion.start : null,
+            trim_end: trimRegion ? trimRegion.end : null,
+        };
+        fetch("{% url 'processing:render_sample' sample.pk %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}",
+            },
+            body: JSON.stringify(params),
+        }).then((resp) => {
+            if (resp.ok) {
+                window.location = "{% url 'analysis:sample_analysis' sample.pk %}";
+            } else {
+                btn.disabled = false;
+                btn.textContent = "Confirm edit";
+            }
+        });
+    });
+
   </script>
 
 {% endblock %}
