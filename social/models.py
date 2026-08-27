@@ -25,19 +25,11 @@ class PostQuerySet(models.QuerySet):
 
     def discard(self):
         """Delete these drafts together with their samples and audio files.
-
-        A draft Post and its Sample exist only so that analysis can run while
-        the caption is being written. If the composer is abandoned, neither was
-        ever filed deliberately, so both are removed. Post.sample is PROTECT,
-        which is correct for published posts, so the post must go first.
         """
         count = 0
         for post in self.filter(sample__is_committed=False).select_related("sample"):
             sample = post.sample
             post.delete()
-            if sample.audio_file:
-                # Django does not remove the file when the row goes.
-                sample.audio_file.delete(save=False)
             sample.delete()
             count += 1
         return count

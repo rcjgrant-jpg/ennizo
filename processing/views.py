@@ -3,13 +3,25 @@ import json
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
+from django.utils import timezone
 
 from library.models import Sample
 from .tasks import render_sample
 
-
-
+@require_GET
+def render_status(request, pk):
+    sample = get_object_or_404(
+        Sample, pk=pk, folder__library__user=request.user
+    )
+    after = request.GET.get("after")
+    renders = sample.renders.order_by("-pk")
+    if after:
+        renders = renders.filter(pk__gt=int(after))
+    latest = renders.first()
+    if latest:
+        return JsonResponse({"done": True, "render_pk": latest.pk})
+    return JsonResponse({"done": False})
 
 def _page_context(request, sample):
     """Everything both the full page and the polled fragment need."""
@@ -28,7 +40,7 @@ def edit_sample(request, pk):
     pk=pk,
     folder__library__user=request.user,
     )
-    
+    Sample.objects.filter(pk=pk).update(last_active_at=timezone.now())
     return render(request, "processing/edit_sample.html", _page_context(request, sample))
 
 @require_POST
@@ -52,9 +64,20 @@ def render_sample_view(request, pk):
                 and trim_start >= 0
                 and trim_end > trim_start):
             return JsonResponse({"error": "invalid trim"}, status=400)
+        
+    
+    gains = params.get("gains")
+    if gains is not None:
+        if not (isinstance(gains, list)
+                and len(gains) == 8
+                and all(isinstance(g, (int, float)) and -12 <= g <= 12 for g in gains)):
+            return JsonResponse({"error": "invalid gains"}, status=400)
 
     transaction.on_commit(lambda: render_sample.delay(sample.pk, params))
-    return JsonResponse({"ok": True})
+    
+    latest = sample.renders.order_by("-pk").first()
+    return JsonResponse({"ok": True, "after": latest.pk if latest else 0})
+    
     
 def editor_home(request):
     return render(request, "processing/editor_home.html")    

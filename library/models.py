@@ -7,6 +7,9 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from datetime import timedelta
+
+
 
 AUDIO_EXTENSIONS = ["wav", "aiff", "aif", "aifc", "flac", "mp3"]
 
@@ -91,6 +94,20 @@ class SampleQuerySet(models.QuerySet):
         return self.filter(
             Q(metadata__isnull=True) | Q(metadata__status__in=["pending", "failed"])
         )
+        
+    def reap_uncommitted(self, older_than_minutes=30):
+        """Delete abandoned samples together with their audio files."""
+
+        cutoff = timezone.now() - timedelta(minutes=older_than_minutes)
+        count = 0
+        for sample in self.filter(
+            is_committed=False,
+            post__isnull=True,
+            last_active_at__lt=cutoff,
+        ):
+            sample.delete()
+            count += 1
+        return count
 
 
 class Folder(models.Model):
@@ -199,6 +216,7 @@ class Sample(models.Model):
     note = models.TextField(blank=True)                     # U2.6
     created_at = models.DateTimeField(auto_now_add=True)
     is_committed = models.BooleanField(default=True)
+    last_active_at = models.DateTimeField(auto_now_add=True)
 
     tags = models.ManyToManyField(
         "Tag", through="SampleTag", related_name="samples"

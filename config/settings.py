@@ -144,6 +144,12 @@ CELERY_TASK_SOFT_TIME_LIMIT = 540
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_EAGER") == "True"
 CELERY_TASK_EAGER_PROPAGATES = True
 
+CELERY_BEAT_SCHEDULE = {
+    "reap-abandoned-samples": {
+        "task": "library.tasks.reap_abandoned_samples",
+        "schedule": 900,  # every 15 minutes
+    },
+}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/

@@ -8,6 +8,7 @@ from social.models import Post
 
 from .models import AnalysisStatus, DerivedMetadata
 from .tasks import analyse_sample
+from django.utils import timezone
 
 
 # --- helpers -----------------------------------------------------------------
@@ -51,6 +52,8 @@ def _page_context(request, sample):
 def sample_analysis(request, pk):
     """Full analysis / confirmation page."""
     sample = _get_visible_sample(request, pk)
+    if not sample.is_committed:
+        Sample.objects.filter(pk=pk).update(last_active_at=timezone.now())
     return render(request, "analysis/sample_analysis.html", _page_context(request, sample))
 
 

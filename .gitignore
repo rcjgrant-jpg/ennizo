@@ -8,3 +8,6 @@ db.sqlite3
 /staticfiles/
 node_modules/
 static/css/site.css
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal

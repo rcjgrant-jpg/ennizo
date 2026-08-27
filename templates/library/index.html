@@ -11,11 +11,11 @@
     </a>
   </div>
 
-  {% if messages %}
+  {% comment %} {% if messages %}
     {% for message in messages %}
       <p class="text-muted-foreground mb-4 text-sm">{{ message }}</p>
     {% endfor %}
-  {% endif %}
+  {% endif %} {% endcomment %}
 
   <form method="post" action="{% url 'library:create_folder' %}"
         class="mb-6 flex items-center gap-2">

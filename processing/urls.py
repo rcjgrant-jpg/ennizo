@@ -9,4 +9,5 @@ urlpatterns = [
     path("", views.editor_home, name="editor_home"),
     path("samples/<int:pk>/edit", views.edit_sample, name="edit_sample"),
     path("sample/<int:pk>/render/", views.render_sample_view, name="render_sample"),
+    path("samples/<int:pk>/render/status/", views.render_status, name="render_status"),
 ]
