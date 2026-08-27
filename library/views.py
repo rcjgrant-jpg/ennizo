@@ -7,16 +7,21 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import FolderForm, SampleUploadForm
-from social.models import Post
 
 from .models import Folder, Sample, SampleTag, Tag, TagSource, TagStatus
 
+import subprocess
+import tempfile
+from pathlib import Path
+
+from django.core.files import File
+from django.http import JsonResponse
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.text import slugify
 
 @login_required
 def index(request):
-    # Navigating here means the composer was left without publishing.
-    Post.objects.drafts_for(request.user).discard()
-
     folders = (
         Folder.objects
         .filter(library__user=request.user)
@@ -109,7 +114,9 @@ def delete_sample(request, pk):
 
     if request.method == "POST":
         try:
-            sample.audio_file.delete(save=False)
+            # File cleanup and draft teardown live in Sample.delete().
+            # PROTECT only fires for a published post now, so the error
+            # message below is precisely true.
             sample.delete()
             messages.success(request, "Sample deleted.")
         except ProtectedError:
@@ -143,11 +150,91 @@ def create_folder(request):
 
 
 @login_required
-def record(request):
+def record_sample(request):
+    if request.method == "POST":
+        blob = request.FILES.get("audio")
+        if blob is None:
+            return JsonResponse({"error": "No audio was received."}, status=400)
+        if blob.size > 100 * 1024 * 1024:
+            return JsonResponse(
+                {"error": "That recording is too large (100MB maximum)."},
+                status=400,
+            )
+
+        folder = Folder.objects.filter(
+            library__user=request.user,
+            pk=request.POST.get("folder"),
+        ).first()
+        if folder is None:
+            return JsonResponse({"error": "Choose a valid folder."}, status=400)
+
+        title = request.POST.get("title", "").strip() or (
+            "Recording " + timezone.now().strftime("%Y-%m-%d %H:%M")
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / ("input" + Path(blob.name).suffix)
+            dst = Path(tmp) / "output.wav"
+
+            with src.open("wb") as fh:
+                for chunk in blob.chunks():
+                    fh.write(chunk)
+
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(src), str(dst)],
+                    check=True,
+                    capture_output=True,
+                    timeout=120,
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                return JsonResponse(
+                    {"error": "The recording could not be converted."},
+                    status=500,
+                )
+
+            with dst.open("rb") as fh:
+                with transaction.atomic():
+                    sample = Sample(
+                        folder=folder,
+                        title=title,
+                        is_committed=False,
+                    )
+                    sample.audio_file.save(
+                        f"{slugify(title) or 'recording'}.wav",
+                        File(fh),
+                        save=True,
+                    )
+
+        messages.success(request, f"“{sample.title}” recorded.")
+        return JsonResponse(
+            {"redirect": reverse("analysis:sample_analysis", args=[sample.pk])}
+        )
+
+    folders = Folder.objects.filter(library__user=request.user).order_by("name")
     return render(request, "library/record.html", {
+        "folders": folders,
         "active_page": "record",
     })
 
+@login_required
+@require_POST
+def discard_sample(request, pk):
+    
+    sample = get_object_or_404(
+        Sample,
+        pk=pk,
+        folder__library__user=request.user,
+        is_committed=False,
+    )
+    source = sample.rendered_from
+    title = sample.title
+    sample.delete()
+    messages.info(request, f"“{title}” discarded.")
+
+    if source is not None and source.folder.library.user_id == request.user.pk:
+        return redirect("analysis:sample_analysis", pk=source.pk)
+    return redirect("library:index")
 
 @login_required
 @require_POST

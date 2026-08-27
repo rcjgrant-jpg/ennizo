@@ -1,6 +1,6 @@
 {% extends "base_app.html" %}
 {% block content %}
-  <div class="flex flex-col items-center justify-center gap-4 py-24">
+  <div class="flex min-h-full flex-col items-center justify-center gap-4" style="min-height: 100%">
     <p class="text-sm text-white/50">Upload a sample to start editing</p>
     <a href="{% url 'library:upload' %}"
        class="bg-primary text-primary-foreground rounded-md px-5 py-2 text-sm font-semibold">

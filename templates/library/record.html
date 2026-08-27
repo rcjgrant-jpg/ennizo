@@ -5,7 +5,127 @@
 {% block body_class %}h-screen bg-background text-foreground flex flex-col items-center justify-center{% endblock %}
 
 {% block body %}
-  <h1 class="text-2xl font-semibold mb-2">Record</h1>
-  <p class="text-muted-foreground text-sm mb-6">Recording interface goes here.</p>
+  <h1 class="text-2xl font-semibold mb-6">Record</h1>
+
+  {# Live waveform #}
+  <div id="waveform" class="w-full max-w-2xl h-32 mb-8 rounded-lg bg-muted/30"></div>
+
+  {# Transport #}
+
+  <div class="flex items-center gap-6 mb-8">
+
+    <button id="record-btn" type="button" aria-label="Record"
+            class="flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none">
+      <svg id="record-dot" xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+           viewBox="0 0 24 24" fill="currentColor" class="text-red-500">
+        <circle cx="12" cy="12" r="10"/>
+      </svg>
+    </button>
+
+    <button id="stop-btn" type="button" disabled aria-label="Stop"
+            class="flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+           viewBox="0 0 24 24" fill="currentColor" class="text-neutral-200">
+        <rect x="5" y="5" width="14" height="14" rx="2"/>
+      </svg>
+    </button>
+    
+  </div>
+  {# Confirm — hidden until a recording exists #}
+  <div id="confirm-panel" class="hidden flex-col items-center gap-3 mb-8">
+    <input id="title-input" type="text"
+           class="w-72 rounded-md border border-border bg-background px-3 py-2 text-sm"
+           placeholder="Title">
+    <select id="folder-select"
+            class="w-72 rounded-md border border-border bg-background px-3 py-2 text-sm">
+      {% for folder in folders %}
+        <option value="{{ folder.pk }}">{{ folder.name }}</option>
+      {% endfor %}
+    </select>
+    <button id="confirm-btn" type="button"
+            class="px-6 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-40">
+      Confirm
+    </button>
+    <p id="error-msg" class="hidden text-sm text-red-500"></p>
+  </div>
+
   <a href="{% url 'library:index' %}" class="text-sm text-primary hover:underline">Back to library</a>
+
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/record.min.js"></script>
+  <script>
+    const recordBtn = document.getElementById("record-btn");
+    const stopBtn = document.getElementById("stop-btn");
+    const confirmPanel = document.getElementById("confirm-panel");
+    const confirmBtn = document.getElementById("confirm-btn");
+    const titleInput = document.getElementById("title-input");
+    const folderSelect = document.getElementById("folder-select");
+    const errorMsg = document.getElementById("error-msg");
+
+    let recordedBlob = null;
+
+    const record = WaveSurfer.Record.create({
+      scrollingWaveform: true,
+      renderRecordedAudio: false,
+    });
+
+    const ws = WaveSurfer.create({
+      container: "#waveform",
+      height: 128,
+      waveColor: "#f87171",
+      plugins: [record],
+    });
+
+    record.on("record-end", (blob) => {
+      recordedBlob = blob;
+      recordBtn.disabled = false;
+      stopBtn.disabled = true;
+      if (!titleInput.value) {
+        titleInput.value = "Recording " + new Date().toLocaleString();
+      }
+      confirmPanel.classList.remove("hidden");
+      confirmPanel.classList.add("flex");
+    });
+
+    recordBtn.addEventListener("click", async () => {
+      recordedBlob = null;
+      confirmPanel.classList.add("hidden");
+      confirmPanel.classList.remove("flex");
+      await record.startRecording();
+      recordBtn.disabled = true;
+      stopBtn.disabled = false;
+    });
+
+    stopBtn.addEventListener("click", () => {
+      record.stopRecording();
+    });
+
+    confirmBtn.addEventListener("click", async () => {
+      if (!recordedBlob) return;
+      confirmBtn.disabled = true;
+      errorMsg.classList.add("hidden");
+
+      const ext = (recordedBlob.type.split(";")[0].split("/")[1]) || "webm";
+      const fd = new FormData();
+      fd.append("audio", recordedBlob, "recording." + ext);
+      fd.append("title", titleInput.value);
+      fd.append("folder", folderSelect.value);
+
+      try {
+        const resp = await fetch("{% url 'library:record' %}", {
+          method: "POST",
+          headers: { "X-CSRFToken": "{{ csrf_token }}" },
+          body: fd,
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Upload failed.");
+        window.location = data.redirect;
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove("hidden");
+        confirmBtn.disabled = false;
+      }
+    });
+  </script>
 {% endblock %}
+</script>
