@@ -6,6 +6,20 @@
   {% include "partials/_waveform.html" with with_media=True %}
  {{ eq_bands|json_script:"eq-bands" }}
 
+  <div id="fx-panel" class="mt-4 flex items-center gap-3">
+
+    <button id="fx-tame" type="button" data-label="Tame peaks"
+        class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">
+      Tame peaks
+    </button>
+    
+    <button id="fx-normalise" type="button" data-label="Normalise loudness"
+        class="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20">
+      Normalise loudness
+    </button>
+    <span id="fx-status" class="text-sm text-white/40"></span>
+  </div>
+
   <div id="eq-panel" class="mt-4 rounded-xl border border-white/10 bg-white/5 p-5">
     <div class="flex items-end justify-between gap-2">
      {% for band in eq_bands %}
@@ -40,7 +54,7 @@
         const source = ctx.createMediaElementSource(window.ennizoMedia)
 
         const frequencies = JSON.parse(document.getElementById("eq-bands").textContent);
-    
+
         const filters = frequencies.map((freq, index) => {
            const filter = ctx.createBiquadFilter();
            filter.type = "peaking";
@@ -49,7 +63,7 @@
            filter.gain.value = 0;
            return filter;
         });
-        
+
         source.connect(filters[0]);
         for (let i = 0; i < filters.length - 1; i ++) {
             filters[i].connect(filters[i + 1]);
@@ -96,24 +110,129 @@
     const regions = window.ennizoWave.registerPlugin(WaveSurfer.Regions.create());
     window.ennizoRegions = regions;
 
-    function addInitialRegion() { 
+    function addInitialRegion(start, end) {
 
+        const duration = window.ennizoWave.getDuration();
         trimRegion = regions.addRegion({
-            start: 0,
-            end: window.ennizoWave.getDuration(),
-            color: "rgba(139, 92, 246, 0.15)",   
+            start: Math.min(start !== undefined ? start : 0, duration),
+            end: Math.min(end !== undefined ? end : duration, duration),
+            color: "rgba(139, 92, 246, 0.15)",
             drag: true,
             resize: true,
             });
 
      }
-    
+
     if (window.ennizoWave.getDuration() > 0) { addInitialRegion(); }
-    else { window.ennizoWave.on("ready", addInitialRegion); }
+    else { window.ennizoWave.once("ready", () => addInitialRegion()); }
 
     regions.on("region-updated", (region) => {
         console.log("trim", region.start, region.end);
         });
+
+    /* ---- Server-rendered effects (normalise) ---- */
+
+    const originalUrl = "{{ sample.audio_file.url }}";
+    const renderUrl = "{% url 'processing:render_sample' sample.pk %}";
+    const statusUrl = "{% url 'processing:render_status' sample.pk %}";
+
+    const fx = {tame_peaks: false, normalise: false };
+    const fxButtons = {
+        tame_peaks: document.getElementById("fx-tame"),
+        normalise: document.getElementById("fx-normalise"),
+    };
+    const fxStatus = document.getElementById("fx-status");
+    let currentObjectUrl = null;
+
+    function setFxBusy(busy) {
+        Object.values(fxButtons).forEach((b) => { b.disabled = busy; });
+        fxStatus.textContent = busy ? "Rendering preview…" : "";
+    }
+
+    function updateFxLabels() {
+        Object.entries(fxButtons).forEach(([key, b]) => {
+            b.textContent = fx[key] ? "Undo" : b.dataset.label;
+            b.classList.toggle("bg-primary", fx[key]);
+            b.classList.toggle("text-primary-foreground", fx[key]);
+            b.classList.toggle("bg-white/10", !fx[key]);
+        });
+    }
+
+    function queueRender(params, onDone, onError) {
+        fetch(renderUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}",
+            },
+            body: JSON.stringify(params),
+        }).then((resp) => {
+            if (!resp.ok) { onError(); return; }
+            resp.json().then((data) => {
+                const url = statusUrl + "?after=" + data.after;
+                const poll = setInterval(() => {
+                    fetch(url)
+                        .then((r) => r.json())
+                        .then((status) => {
+                            if (status.done) {
+                                clearInterval(poll);
+                                onDone(status);
+                            }
+                        });
+                }, 1500);
+            });
+        });
+    }
+
+    function loadAudio(url, onLoaded) {
+        const wasPlaying = !window.ennizoMedia.paused;
+        window.ennizoMedia.pause();
+        const saved = trimRegion
+            ? { start: trimRegion.start, end: trimRegion.end }
+            : null;
+        fetch(url)
+            .then((resp) => resp.blob())
+            .then((blob) => {
+                if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+                currentObjectUrl = URL.createObjectURL(blob);
+                window.ennizoWave.once("ready", () => {
+                    regions.clearRegions();
+                    if (saved) { addInitialRegion(saved.start, saved.end); }
+                    else { addInitialRegion(); }
+                    if (wasPlaying) window.ennizoWave.play();
+                    if (onLoaded) onLoaded();
+                });
+                window.ennizoWave.load(currentObjectUrl);
+            });
+    }
+
+    function applyFx() {
+        setFxBusy(true);
+        if (!fx.tame_peaks && !fx.normalise) {
+            // Nothing left switched on: revert locally, no server round trip.
+            loadAudio(originalUrl, () => setFxBusy(false));
+            return;
+        }
+        const params = { tame_peaks: fx.tame_peaks, normalise: fx.normalise, preview: true };
+        queueRender(
+            params,
+            (status) => loadAudio(status.url, () => setFxBusy(false)),
+            () => {
+                fxStatus.textContent = "Preview failed";
+                setFxBusy(false);
+            },
+        );
+    }
+
+    Object.entries(fxButtons).forEach(([key, b]) => {
+        b.addEventListener("click", () => {
+            fx[key] = !fx[key];
+            updateFxLabels();
+            applyFx();
+        });
+    });
+
+    /* ---- Confirm edit ---- */
 
     const btn = document.getElementById("render-button");
 
@@ -124,39 +243,21 @@
             trim_start: trimRegion ? trimRegion.start : null,
             trim_end: trimRegion ? trimRegion.end : null,
             gains: window.ennizoEQ.map((f) => f.gain.value),
+            normalise: fx.normalise,
         };
-        fetch("{% url 'processing:render_sample' sample.pk %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": "{{ csrf_token }}",
+        queueRender(
+            params,
+            (status) => {
+                window.location =
+                    "{% url 'analysis:sample_analysis' 0 %}"
+                    .replace("0", status.render_pk);
             },
-            body: JSON.stringify(params),
-            
-            }).then((resp) => {
-                if (!resp.ok) {
-                    btn.disabled = false;
-                    btn.textContent = "Confirm edit";
-                    return;
-                }
-                resp.json().then((data) => {
-                    const statusUrl = "{% url 'processing:render_status' sample.pk %}"
-                                    + "?after=" + data.after;
-                    const poll = setInterval(() => {
-                        fetch(statusUrl)
-                            .then((r) => r.json())
-                            .then((status) => {
-                                if (status.done) {
-                                    clearInterval(poll);
-                                    window.location =
-                                        "{% url 'analysis:sample_analysis' 0 %}"
-                                        .replace("0", status.render_pk);
-                                }
-                            });
-                    }, 1500);
-                });
-            });
-        });
+            () => {
+                btn.disabled = false;
+                btn.textContent = "Confirm edit";
+            },
+        );
+    });
 
   </script>
 

@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='processedvariant',
             name='operation',
-            field=models.CharField(choices=[('eq', 'Equalisation'), ('normalise', 'Normalise'), ('trim', 'Trim silence'), ('denoise', 'De-noise')], default='', max_length=20),
+            field=models.CharField(choices=[('eq', 'Equalisation'), ('normalise', 'Normalise'), ('trim', 'Trim silence')], default='', max_length=20),
             preserve_default=False,
         ),
         migrations.AddField(

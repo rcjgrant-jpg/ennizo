@@ -11,12 +11,48 @@ from scipy.signal import lfilter
 
 from library.models import Sample
 
+from pedalboard import Pedalboard, Compressor
+
+import resource
+_soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+if _soft > 10240:
+    resource.setrlimit(resource.RLIMIT_NOFILE, (10240, _hard))
+
+import pyloudnorm as pyln
+
 logger = logging.getLogger(__name__)
 
 EQ_BANDS = [63, 125, 250, 500, 1000, 2000, 4000, 8000]
 EQ_Q = 1.0
 
 # Ai used to assist with helper function implementation
+
+def apply_tame_peaks(y: np.ndarray, sr: int,
+                     threshold_db: float = -1.0,
+                     ratio: float = 20.0) -> np.ndarray:
+    """Attenuate transients above the threshold; audio below it is
+    untouched. Expects float audio, shape (n,) mono or (n, channels);
+    returns the same shape."""
+    board = Pedalboard([Compressor(threshold_db=threshold_db, ratio=ratio,
+                                   attack_ms=0.5, release_ms=100.0)])
+    audio = y.astype(np.float32)
+    if audio.ndim == 1:
+        return board(audio, sr).astype(y.dtype)
+    processed = board(audio.T, sr)
+    return processed.T.astype(y.dtype)
+
+def apply_normalise(y: np.ndarray, sr: int, target_lufs: float = -14.0) -> np.ndarray:
+    """Loudness-normalise to target integrated LUFS, then hard-limit
+    any inter-sample overs introduced by the gain change."""
+    if len(y) < int(0.4 * sr):
+        return y
+    meter = pyln.Meter(sr)
+    loudness = meter.integrated_loudness(y)
+    if not np.isfinite(loudness):  # silence or near-silence
+        return y
+    normalised = pyln.normalize.loudness(y, loudness, target_lufs)
+    
+    return normalised
 
 def _peaking_coeffs(freq, sr, gain_db, q):
     """Biquad peaking-EQ coefficients per the Audio EQ Cookbook
@@ -62,6 +98,12 @@ def render_sample(sample_pk, params):
         if start_idx < end_idx and (start_idx > 0 or end_idx < len(audio)):
             audio = audio[start_idx:end_idx]
             
+    if params.get("normalise"):
+        audio = apply_normalise(audio, sr)
+        
+    if params.get("tame_peaks"):
+        audio = apply_tame_peaks(audio, sr)
+            
     gains = params.get("gains")
     if gains and any(abs(g) > 0.01 for g in gains):
         audio = _apply_eq(audio, sr, gains)
@@ -76,9 +118,10 @@ def render_sample(sample_pk, params):
     sf.write(temp_file_path, audio, sr)
 
     try:
+        suffix = "(preview)" if params.get("preview") else "(edited)"
         new_sample = Sample(
             folder=sample.folder,
-            title=f"{sample.title} (edited)",
+            title=f"{sample.title} {suffix}",
             is_public=sample.is_public,
             is_committed=False,
             rendered_from=sample,

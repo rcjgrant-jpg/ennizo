@@ -40,11 +40,12 @@ more-itertools==11.1.0
 msgpack==1.2.1
 music21==10.5.0
 narwhals==2.24.0
-noisereduce==3.0.3
+
 numba==0.61.2
 numpy==2.2.6
 onnxruntime==1.28.0
 packaging==26.2
+pedalboard==0.9.24
 pillow==12.3.0
 platformdirs==4.11.0
 pluggy==1.6.0
