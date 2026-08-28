@@ -1,0 +1,17 @@
+{% comment %}
+Shared avatar. Uploaded image if one exists, initials otherwise.
+
+Context (pass with `include ... with`):
+  account    — the User whose avatar to draw (named to avoid shadowing the
+               auth context processor's `user`)
+  size_class — Tailwind sizing AND text sizing, e.g. "h-9 w-9 text-[11px]"
+{% endcomment %}
+{% if account.avatar %}
+  <img src="{{ account.avatar.url }}" alt=""
+       class="{{ size_class }} shrink-0 select-none rounded-full object-cover">
+{% else %}
+  <div class="{{ size_class }} flex shrink-0 select-none items-center justify-center rounded-full font-bold text-white"
+       style="background-color: #7c3aed;">
+    {{ account.initials }}
+  </div>
+{% endif %}

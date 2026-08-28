@@ -1,0 +1,118 @@
+{% comment %}
+The toggle and the tab content swap together as one unit: if only the
+content were the htmx target, the active highlight on the toggle buttons
+would be left showing the previous tab.
+{% endcomment %}
+<div id="profile-panel">
+
+  <div class="bg-card border-border mb-4 grid grid-cols-3 gap-1 rounded-xl border p-1" role="tablist">
+    <button type="button" role="tab"
+            hx-get="{% url 'accounts:profile' profile_user.username %}?tab=posts"
+            hx-target="#profile-panel" hx-swap="outerHTML" hx-push-url="true"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
+                   {% if tab == 'posts' %}bg-primary/15 text-primary{% else %}text-muted-foreground hover:text-foreground{% endif %}">
+      Posts
+    </button>
+    <button type="button" role="tab"
+            hx-get="{% url 'accounts:profile' profile_user.username %}?tab=samples"
+            hx-target="#profile-panel" hx-swap="outerHTML" hx-push-url="true"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
+                   {% if tab == 'samples' %}bg-primary/15 text-primary{% else %}text-muted-foreground hover:text-foreground{% endif %}">
+      Samples
+    </button>
+    <button type="button" role="tab"
+            hx-get="{% url 'accounts:profile' profile_user.username %}?tab=credits"
+            hx-target="#profile-panel" hx-swap="outerHTML" hx-push-url="true"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
+                   {% if tab == 'credits' %}bg-primary/15 text-primary{% else %}text-muted-foreground hover:text-foreground{% endif %}">
+      Credits
+    </button>
+  </div>
+
+  {# --- Posts ------------------------------------------------------------- #}
+  {% if tab == "posts" %}
+    <div class="space-y-4">
+      {% for post in posts %}
+        {% include "social/partials/post_card.html" with show_delete=is_own_profile %}
+      {% empty %}
+        <p class="text-muted-foreground py-12 text-center text-sm">
+          {% if is_own_profile %}You haven't posted anything yet.{% else %}No posts yet.{% endif %}
+        </p>
+      {% endfor %}
+    </div>
+
+  {# --- Samples ----------------------------------------------------------- #}
+  {% elif tab == "samples" %}
+    <div class="space-y-2">
+      {% for sample in samples %}
+        <div class="bg-card border-border flex items-center gap-3 rounded-lg border p-3">
+          <button type="button"
+                  data-audio-src="{{ sample.audio_file.url }}"
+                  class="bg-primary text-primary-foreground grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs">
+            &#9654;
+          </button>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium">{{ sample.title }}</p>
+            <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+              {% if sample.derived_bpm %}<span>{{ sample.derived_bpm }} BPM</span>{% endif %}
+              {% for st in sample.accepted_tags %}
+                <span class="bg-muted rounded-full px-2 py-0.5">{{ st.tag.name }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% include "attribution/partials/download_button.html" with sample=sample download_count=sample.download_count %}
+        </div>
+      {% empty %}
+        <p class="text-muted-foreground py-12 text-center text-sm">
+          {% if is_own_profile %}You have no public samples. Mark a sample public to show it here.{% else %}No public samples yet.{% endif %}
+        </p>
+      {% endfor %}
+    </div>
+
+  {# --- Credits ----------------------------------------------------------- #}
+  {% else %}
+    <div class="space-y-4">
+      {% for credit in credits %}
+        <article class="bg-card border-border rounded-xl border p-4">
+
+          <div class="bg-muted flex items-center gap-3 rounded-lg p-3">
+            <button type="button"
+                    data-audio-src="{{ credit.sample.audio_file.url }}"
+                    class="bg-primary text-primary-foreground grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs">
+              &#9654;
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">{{ credit.sample.title }}</p>
+              <p class="text-muted-foreground text-xs">
+                {% if credit.sample.metadata.bpm %}{{ credit.sample.metadata.bpm }} BPM{% endif %}
+              </p>
+            </div>
+          </div>
+
+          <p class="mt-3 text-sm">
+            Used in
+            <a href="{{ credit.track_url }}" target="_blank" rel="noopener noreferrer"
+               class="text-primary font-medium hover:underline">{{ credit.track_title }}</a>
+            <span class="text-muted-foreground">on {{ credit.get_platform_display }}</span>
+          </p>
+
+          <footer class="border-border mt-3 flex items-center gap-2 border-t pt-3">
+            <a href="{% url 'accounts:profile' credit.creditor.username %}" class="shrink-0">
+              {% include "partials/_avatar.html" with account=credit.creditor size_class="h-6 w-6 text-[9px]" %}
+            </a>
+            <a href="{% url 'accounts:profile' credit.creditor.username %}"
+               class="text-muted-foreground font-mono text-xs hover:underline">@{{ credit.creditor.username }}</a>
+            <span class="text-muted-foreground ml-auto text-xs">{{ credit.created_at|timesince }} ago</span>
+          </footer>
+
+        </article>
+      {% empty %}
+        <p class="text-muted-foreground py-12 text-center text-sm">
+          No credits yet. Credits appear when someone uses
+          {% if is_own_profile %}your samples{% else %}these samples{% endif %} in a released track.
+        </p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>

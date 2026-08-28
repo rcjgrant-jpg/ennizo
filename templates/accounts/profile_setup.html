@@ -1,0 +1,163 @@
+{% extends "base_app.html" %}
+
+{% block title %}{% if is_welcome %}Set up your profile{% else %}Edit profile{% endif %} — Ennizo{% endblock %}
+
+{% block content %}
+<div class="mx-auto w-full max-w-md px-4 py-10">
+
+  <h1 class="text-xl font-semibold">
+    {% if is_welcome %}Welcome to Ennizo{% else %}Edit profile{% endif %}
+  </h1>
+  <p class="text-muted-foreground mb-6 mt-1 text-sm">
+    {% if is_welcome %}
+      Set up your profile so other producers know who you are. You can change all of this later.
+    {% else %}
+      Update how your profile appears to other producers.
+    {% endif %}
+  </p>
+
+  <form method="post" enctype="multipart/form-data" class="flex flex-col gap-4">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="text-destructive text-xs">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    {# --- Avatar -------------------------------------------------------- #}
+    {# Custom markup replacing ClearableFileInput's default rendering.     #}
+    {# The field names (avatar, avatar-clear) are what Django reads, so    #}
+    {# the form and view are untouched. Nothing commits until Save.        #}
+    <div class="flex items-center gap-4">
+
+      <div class="relative shrink-0">
+        <label for="id_avatar" class="group relative block h-16 w-16 cursor-pointer"
+               title="Change profile picture">
+          <span id="avatar-preview">
+            {% include "partials/_avatar.html" with account=request.user size_class="h-16 w-16 text-xl" %}
+          </span>
+          <span class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+            <svg viewBox="0 0 24 24" class="h-5 w-5 text-white" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
+              <path d="m15 5 4 4"/>
+            </svg>
+          </span>
+          <span class="sr-only">Change profile picture</span>
+        </label>
+
+        <button type="button" id="avatar-remove"
+                class="border-border bg-muted text-muted-foreground hover:text-destructive absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full border {% if not request.user.avatar %}hidden{% endif %}"
+                title="Remove picture">
+          <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+          <span class="sr-only">Remove picture</span>
+        </button>
+      </div>
+
+      <div class="min-w-0 flex-1">
+        <p class="text-xs font-medium">Profile picture</p>
+        <p class="text-muted-foreground mt-0.5 text-xs">
+          Click the picture to choose a new one. Changes apply when you save.
+        </p>
+        <p id="avatar-removed-note" class="text-muted-foreground mt-0.5 hidden text-xs italic">
+          Picture will be removed when you save.
+        </p>
+        {% for error in form.avatar.errors %}
+          <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <input type="file" name="avatar" id="id_avatar" accept="image/*" class="sr-only">
+      <input type="checkbox" name="avatar-clear" id="avatar-clear-flag" class="hidden">
+
+      {# Initials fallback, pre-rendered so the remove preview needs no JS templating #}
+      <template id="avatar-initials-template">
+        <div class="flex h-16 w-16 shrink-0 select-none items-center justify-center rounded-full text-xl font-bold text-white"
+             style="background-color: #7c3aed;">{{ request.user.initials }}</div>
+      </template>
+      <template id="avatar-img-template">
+        <img src="" alt="" class="h-16 w-16 shrink-0 select-none rounded-full object-cover">
+      </template>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label for="{{ form.first_name.id_for_label }}" class="mb-1 block text-xs font-medium">First name</label>
+        {{ form.first_name }}
+        {% for error in form.first_name.errors %}
+          <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        <label for="{{ form.last_name.id_for_label }}" class="mb-1 block text-xs font-medium">Last name</label>
+        {{ form.last_name }}
+        {% for error in form.last_name.errors %}
+          <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      <label for="{{ form.bio.id_for_label }}" class="mb-1 block text-xs font-medium">Bio</label>
+      {{ form.bio }}
+      {% for error in form.bio.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="mt-2 flex items-center gap-3">
+      <button type="submit"
+              class="bg-primary hover:bg-primary/90 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors">
+        Save profile
+      </button>
+      {% if is_welcome %}
+        <a href="{% url 'accounts:profile' request.user.username %}"
+           class="text-muted-foreground text-xs hover:underline">Skip for now</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      const input = document.getElementById("id_avatar");
+      const clearFlag = document.getElementById("avatar-clear-flag");
+      const preview = document.getElementById("avatar-preview");
+      const removeBtn = document.getElementById("avatar-remove");
+      const removedNote = document.getElementById("avatar-removed-note");
+      const initialsTpl = document.getElementById("avatar-initials-template");
+      const imgTpl = document.getElementById("avatar-img-template");
+
+      // Picking a file: preview it, cancel any pending removal.
+      input.addEventListener("change", function () {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const node = imgTpl.content.firstElementChild.cloneNode(true);
+          node.src = e.target.result;
+          preview.replaceChildren(node);
+        };
+        reader.readAsDataURL(file);
+        clearFlag.checked = false;
+        removedNote.classList.add("hidden");
+        removeBtn.classList.remove("hidden");
+      });
+
+      // Removing: preview the initials fallback; commit happens on save.
+      removeBtn.addEventListener("click", function () {
+        clearFlag.checked = true;
+        input.value = "";
+        preview.replaceChildren(initialsTpl.content.firstElementChild.cloneNode(true));
+        removedNote.classList.remove("hidden");
+        removeBtn.classList.add("hidden");
+      });
+    })();
+  </script>
+
+</div>
+{% endblock %}

@@ -1,9 +1,12 @@
 <article class="bg-card border-border rounded-xl border p-4">
 
   <header class="flex items-center gap-3">
-    <div class="bg-muted h-9 w-9 shrink-0 rounded-full"></div>
+    <a href="{% url 'accounts:profile' post.author.username %}" class="shrink-0">
+      {% include "partials/_avatar.html" with account=post.author size_class="h-9 w-9 text-[11px]" %}
+    </a>
     <div>
-      <p class="text-sm font-medium">{{ post.author }}</p>
+      <a href="{% url 'accounts:profile' post.author.username %}"
+         class="text-sm font-medium hover:underline">{{ post.author.get_full_name|default:post.author.username }}</a>
       <p class="text-muted-foreground text-xs">{{ post.created_at|timesince }} ago</p>
     </div>
   </header>
@@ -42,6 +45,25 @@
   <footer class="border-border mt-3 flex items-center gap-1 border-t pt-3">
     {% include "social/partials/like_button.html" with liked=post.liked_by_user like_count=post.like_count %}
     {% include "social/partials/comment_button.html" with comment_count=post.comment_count %}
+    {% include "attribution/partials/download_button.html" with sample=post.sample download_count=post.download_count %}
+
+    {% if show_delete %}
+      <button type="button"
+              hx-post="{% url 'social:delete_post' post.pk %}"
+              hx-confirm="Delete this post? The sample stays in your library."
+              hx-target="closest article"
+              hx-swap="outerHTML"
+              class="text-muted-foreground hover:text-destructive hover:bg-muted ml-auto flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs">
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none"
+             stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        <span class="sr-only">Delete this post</span>
+      </button>
+    {% endif %}
   </footer>
 
   <div id="comments-{{ post.pk }}" data-comments></div>

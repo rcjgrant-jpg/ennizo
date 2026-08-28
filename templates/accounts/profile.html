@@ -1,23 +1,33 @@
 {% extends "base_app.html" %}
 
+{% block title %}{{ profile_user.username }} — Ennizo{% endblock %}
+
 {% block content %}
-  <header class="mb-8">
-    <h1 class="text-2xl font-semibold">{{ profile_user.username }}</h1>
+<div class="mx-auto w-full max-w-2xl px-4 py-6">
+
+  <header class="mb-6 flex items-start gap-4">
+    {% include "partials/_avatar.html" with account=profile_user size_class="h-20 w-20 text-2xl" %}
+
+    <div class="min-w-0 flex-1">
+      <h1 class="text-2xl font-semibold leading-tight">
+        {{ profile_user.get_full_name|default:profile_user.username }}
+      </h1>
+      <p class="text-muted-foreground font-mono text-sm">@{{ profile_user.username }}</p>
+
+      {% if profile_user.bio %}
+        <p class="mt-3 whitespace-pre-line break-words text-sm [&_a]:text-primary [&_a]:underline">{{ profile_user.bio|urlize }}</p>
+      {% endif %}
+    </div>
 
     {% if is_own_profile %}
-      <a href="{% url 'accounts:settings' %}">Edit profile</a>
+      <a href="{% url 'accounts:profile_setup' %}"
+         class="border-border text-muted-foreground hover:text-foreground shrink-0 rounded-md border px-3 py-1.5 text-xs">
+        Edit profile
+      </a>
     {% endif %}
   </header>
 
-  {% for sample in samples %}
-    <article>{{ sample.title }}</article>
-  {% empty %}
-    <p class="text-muted-foreground">
-      {% if is_own_profile %}
-        You haven't shared any samples yet.
-      {% else %}
-        {{ profile_user.username }} hasn't shared any samples yet.
-      {% endif %}
-    </p>
-  {% endfor %}
+  {% include "accounts/partials/profile_panel.html" %}
+
+</div>
 {% endblock %}
