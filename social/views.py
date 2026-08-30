@@ -1,4 +1,3 @@
-# social/views.py
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -15,6 +14,7 @@ from library.models import Sample, SampleTag, TagStatus
 from .forms import CommentForm, DraftForm, PublishForm
 from .models import Comment, Like, Post
 
+from django.views.decorators.vary import vary_on_headers
 
 # --- helpers -----------------------------------------------------------------
 
@@ -57,6 +57,9 @@ def _feed_queryset(request, selected):
         .annotate(
             like_count=Count("likes", distinct=True),
             comment_count=Count("comments", distinct=True),
+            # distinct on every Count: the three joins would otherwise
+            # multiply each other's rows.
+            download_count=Count("sample__downloads", distinct=True),
             liked_by_user=Exists(
                 Like.objects.filter(post=OuterRef("pk"), user=request.user)
             ),
@@ -129,6 +132,7 @@ def _comments_context(post, form):
 # --- views -------------------------------------------------------------------
 
 @login_required
+@vary_on_headers("HX-Headers")
 def index(request):
     context = _feed_context(request)
     context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
@@ -136,7 +140,7 @@ def index(request):
     draft = Post.objects.drafts_for(request.user).select_related("sample__metadata").first()
     context["draft"] = draft
 
-    if request.headers.get("HX-Request"):
+    if request.headers.get("HX-Request") and not request.headers.get("HX-History-Restore-Request"):
         return render(request, "social/partials/feed_root.html", context)
 
     return render(request, "social/feed.html", context)
@@ -249,7 +253,20 @@ def discard_draft(request):
     })
 
 
+@login_required
+@require_POST
+def delete_post(request, pk):
+    """Remove a published post from the author's profile.
 
+    Only the post goes: the sample stays committed in the library. This is
+    the same decoupling as the 20 Aug refactor read the other way round —
+    just as saving a sample no longer implies a post, deleting a post does
+    not imply deleting a sample.
+    """
+    post = get_object_or_404(Post, pk=pk, author=request.user)
+    post.delete()
+    # Empty 200: htmx swaps the card's outerHTML with nothing.
+    return HttpResponse("")
 
 
 @login_required

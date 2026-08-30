@@ -1,0 +1,82 @@
+{% comment %}
+One entry on the downloads page. Context:
+  record — DownloadRecord, with record.sample.my_credits attached by the view
+  form   — bound CreditForm when a submission failed validation, else absent
+
+Swapped whole by htmx when a credit is submitted, so the credit list below
+the row updates in place and the dropdown collapses.
+{% endcomment %}
+<div id="download-{{ record.pk }}" class="bg-card border-border rounded-xl border p-4">
+
+  <div class="flex items-center gap-3">
+    <button type="button"
+            data-audio-src="{{ record.sample.audio_file.url }}"
+            class="bg-primary text-primary-foreground grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs">
+      &#9654;
+    </button>
+
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm font-medium">{{ record.sample.title }}</p>
+      <a href="{% url 'accounts:profile' record.sample.owner.username %}"
+         class="text-muted-foreground inline-flex items-center gap-1.5 text-xs hover:underline">
+        {% include "partials/_avatar.html" with account=record.sample.owner size_class="h-4 w-4 text-[7px]" %}
+        <span class="font-mono">@{{ record.sample.owner.username }}</span>
+      </a>
+    </div>
+
+    <details class="relative shrink-0">
+      <summary class="border-border text-muted-foreground hover:text-foreground cursor-pointer list-none rounded-md border px-3 py-1.5 text-xs select-none">
+        Credit
+      </summary>
+
+      <form hx-post="{% url 'attribution:add_credit' record.pk %}"
+            hx-target="#download-{{ record.pk }}"
+            hx-swap="outerHTML"
+            class="bg-card border-border absolute right-0 top-full z-20 mt-1 flex w-64 flex-col gap-2 rounded-xl border p-3 shadow-lg">
+        {% csrf_token %}
+
+        {% if form.errors %}
+          <div class="text-destructive text-xs">
+            {% for field in form %}{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}
+          </div>
+        {% endif %}
+
+        <select name="platform"
+                class="bg-background border-border w-full rounded-md border px-3 py-2 text-sm outline-none">
+          <option value="soundcloud" {% if form.platform.value == "soundcloud" %}selected{% endif %}>SoundCloud</option>
+          <option value="spotify" {% if form.platform.value == "spotify" %}selected{% endif %}>Spotify</option>
+          <option value="applemusic" {% if form.platform.value == "applemusic" %}selected{% endif %}>Apple Music</option>
+        </select>
+
+        <input type="text" name="track_title" maxlength="200" required
+               placeholder="Track title"
+               value="{{ form.track_title.value|default:'' }}"
+               class="bg-background border-border w-full rounded-md border px-3 py-2 text-sm outline-none">
+
+        <input type="url" name="track_url" required
+               placeholder="https://…"
+               value="{{ form.track_url.value|default:'' }}"
+               class="bg-background border-border w-full rounded-md border px-3 py-2 text-sm outline-none">
+
+        <button type="submit"
+                class="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm font-semibold">
+          Submit
+        </button>
+      </form>
+    </details>
+  </div>
+
+  {% if record.sample.my_credits %}
+    <div class="border-border mt-3 space-y-1 border-t pt-3">
+      {% for credit in record.sample.my_credits %}
+        <p class="text-muted-foreground text-xs">
+          Credited in
+          <a href="{{ credit.track_url }}" target="_blank" rel="noopener noreferrer"
+             class="text-primary hover:underline">{{ credit.track_title }}</a>
+          on {{ credit.get_platform_display }}
+        </p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>

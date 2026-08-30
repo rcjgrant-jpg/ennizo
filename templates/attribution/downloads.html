@@ -1,0 +1,26 @@
+{% extends "base_app.html" %}
+
+{% block title %}Downloads — Ennizo{% endblock %}
+
+{% block content %}
+<div class="mx-auto w-full max-w-2xl px-4 py-6">
+
+  <h1 class="mb-1 text-xl font-semibold">Downloads</h1>
+  <p class="text-muted-foreground mb-6 text-sm">
+    Samples you've downloaded from other producers. Used one in a track?
+    Credit it and the link appears on the uploader's profile.
+  </p>
+
+  <div class="space-y-3">
+    {% for record in records %}
+      {% include "attribution/partials/download_entry.html" %}
+    {% empty %}
+      <p class="text-muted-foreground py-12 text-center text-sm">
+        Nothing here yet. Downloads from the feed and from other producers'
+        profiles will show up here.
+      </p>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

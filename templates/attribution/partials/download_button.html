@@ -1,0 +1,23 @@
+{% comment %}
+Download control styled to sit beside the like and comment buttons.
+
+Context: sample, download_count.
+
+A plain anchor, not htmx: the response carries Content-Disposition:
+attachment, so the browser saves the file without leaving the page. The
+count reflects the state at render time and catches up on the next load —
+a live swap would need the record written before the file streams, which
+this keeps as one request.
+{% endcomment %}
+<a href="{% url 'attribution:download_sample' sample.pk %}"
+   class="text-muted-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs">
+  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none"
+       stroke="currentColor" stroke-width="1.7"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" x2="12" y1="15" y2="3"/>
+  </svg>
+  <span>{{ download_count|default:0 }}</span>
+  <span class="sr-only">Download this sample</span>
+</a>
