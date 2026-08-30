@@ -1,6 +1,52 @@
-{% extends "base_app.html" %} {% block title %}Settings Ennizo{% endblock %} {% block content %}
-Settings
+{% extends "base_app.html" %}
 
-Nothing here yet.
+{% block title %}Settings — Ennizo{% endblock %}
 
+{% block content %}
+<div class="mx-auto w-full max-w-md px-4 py-10">
+
+  <h1 class="mb-1 text-xl font-semibold">Settings</h1>
+  <p class="text-muted-foreground mb-6 text-sm">Manage your account.</p>
+
+  <div class="bg-card border-border divide-border divide-y rounded-2xl border">
+
+    <div class="flex items-center gap-3 p-4">
+      {% include "partials/_avatar.html" with account=request.user size_class="h-10 w-10 text-sm" %}
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium">{{ request.user.get_full_name|default:request.user.username }}</p>
+        <p class="text-muted-foreground truncate font-mono text-xs">@{{ request.user.username }}</p>
+      </div>
+    </div>
+
+    <a href="{% url 'accounts:profile_setup' %}"
+       class="hover:bg-white/[0.03] flex items-center justify-between p-4 transition-colors">
+      <div>
+        <p class="text-sm font-medium">Edit profile</p>
+        <p class="text-muted-foreground text-xs">Picture, name and bio</p>
+      </div>
+      <svg viewBox="0 0 24 24" class="text-muted-foreground h-4 w-4" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </a>
+
+    <a href="{% url 'password_change' %}"
+       class="hover:bg-white/[0.03] flex items-center justify-between p-4 transition-colors">
+      <div>
+        <p class="text-sm font-medium">Change password</p>
+        <p class="text-muted-foreground text-xs">Update your sign-in password</p>
+      </div>
+      <svg viewBox="0 0 24 24" class="text-muted-foreground h-4 w-4" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </a>
+
+  </div>
+
+  <p class="text-muted-foreground mt-4 text-xs">
+    Recording uses your system's default input device. To record from a
+    different microphone or interface, change the default in your OS sound
+    settings or your browser's site permissions.
+  </p>
+
+</div>
 {% endblock %}

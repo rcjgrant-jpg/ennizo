@@ -10,6 +10,7 @@ urlpatterns = [
     path("post/publish/", views.publish_draft, name="publish_draft"),
     path("post/discard/", views.discard_draft, name="discard_draft"),
     path("post/<int:pk>/state/", views.draft_state, name="draft_state"),
+    path("posts/<int:pk>/delete/", views.delete_post, name="delete_post"),
     path("posts/<int:pk>/like/", views.toggle_like, name="toggle_like"),
     path("posts/<int:pk>/comments/", views.post_comments, name="post_comments"),
     path("posts/<int:pk>/comments/add/", views.add_comment, name="add_comment"),

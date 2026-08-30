@@ -1,24 +1,76 @@
 {% extends "base.html" %}
 
 {% block title %}Create account — Ennizo{% endblock %}
-{% block body_class %}h-screen bg-background text-foreground flex items-center justify-center{% endblock %}
+{% block body_class %}min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-4 py-10{% endblock %}
 
 {% block body %}
-<div class="w-80">
-  <h1 class="text-xl font-semibold mb-6">Create your Ennizo account</h1>
 
-  <form method="post" class="flex flex-col gap-3">
+{# Logo, larger version of the sidebar mark #}
+<div class="mb-8 flex flex-col items-center gap-3">
+  <div class="bg-primary flex h-14 w-14 items-center justify-center rounded-2xl">
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
+         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+         stroke-linejoin="round" class="text-white">
+      <circle cx="8" cy="18" r="4"/><path d="M12 18V2l7 4"/>
+    </svg>
+  </div>
+  <span class="text-2xl font-extrabold tracking-tight">Ennizo</span>
+</div>
+
+<div class="bg-card border-border w-full max-w-sm rounded-2xl border p-8">
+  <h1 class="mb-6 text-lg font-semibold">Create your account</h1>
+
+  <form method="post" class="flex flex-col gap-4">
     {% csrf_token %}
-    {{ form.as_div }}
+
+    <div>
+      <label for="{{ form.username.id_for_label }}" class="mb-1 block text-xs font-medium">Username</label>
+      {{ form.username }}
+      {% for error in form.username.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      <label for="{{ form.email.id_for_label }}" class="mb-1 block text-xs font-medium">Email address</label>
+      {{ form.email }}
+      {% for error in form.email.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      <label for="id_password1" class="mb-1 block text-xs font-medium">Password</label>
+      {{ form.password1 }}
+      {% include "partials/_password_rules.html" with input_id="id_password1" %}
+
+      {% for error in form.password1.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      <label for="{{ form.password2.id_for_label }}" class="mb-1 block text-xs font-medium">Repeat password</label>
+      {{ form.password2 }}
+      {% for error in form.password2.errors %}
+        <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    {% for error in form.non_field_errors %}
+      <p class="text-destructive text-xs">{{ error }}</p>
+    {% endfor %}
+
     <button type="submit"
-            class="py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-xl transition-colors">
+            class="bg-primary hover:bg-primary/90 mt-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-colors">
       Create account
     </button>
   </form>
-
-  <p class="text-xs text-muted-foreground mt-4">
-    Already have an account?
-    <a href="{% url 'login' %}" class="text-primary hover:underline">Sign in</a>
-  </p>
 </div>
+
+<p class="text-muted-foreground mt-5 text-xs">
+  Already have an account?
+  <a href="{% url 'login' %}" class="text-primary hover:underline">Sign in</a>
+</p>
+
 {% endblock %}
