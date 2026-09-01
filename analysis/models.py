@@ -180,24 +180,4 @@ class DerivedMetadata(models.Model):
         }
         return [labels[k] for k, v in self.quality_flags.items() if v and k in labels]
 
-    # --- audition helpers ---
 
-    def transpose_to(self, target_tonic):
-        """Semitone offset to target, constrained to -6..+5 (U3.4)."""
-        if not self.is_pitched:
-            return None
-        return ((target_tonic - self.effective_tonic + 6) % 12) - 6
-
-    def stretch_ratio_to(self, target_bpm):
-        """Playback rate multiplier for project-tempo audition (U3.3)."""
-        if not self.has_tempo or not target_bpm:
-            return None
-        return target_bpm / self.effective_bpm
-
-    def compatible_keys(self):
-        """Relative major/minor, dominant, subdominant — as (tonic, mode)."""
-        if not self.is_pitched:
-            return []
-        t, m = self.effective_tonic, self.effective_mode
-        relative = ((t + 9) % 12, "minor") if m == "major" else ((t + 3) % 12, "major")
-        return [relative, ((t + 7) % 12, m), ((t + 5) % 12, m)]
