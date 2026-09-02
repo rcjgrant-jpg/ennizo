@@ -12,13 +12,6 @@ from scipy.signal import lfilter
 from library.models import Sample
 from library.storage import local_copy
 
-from pedalboard import Pedalboard, Compressor
-
-import resource
-_soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-if _soft > 10240:
-    resource.setrlimit(resource.RLIMIT_NOFILE, (10240, _hard))
-
 import pyloudnorm as pyln
 
 logger = logging.getLogger(__name__)
@@ -30,17 +23,43 @@ EQ_Q = 1.0
 
 def apply_tame_peaks(y: np.ndarray, sr: int,
                      threshold_db: float = -1.0,
-                     ratio: float = 20.0) -> np.ndarray:
+                     ratio: float = 20.0,
+                     release_db_per_s: float = 60.0) -> np.ndarray:
     """Attenuate transients above the threshold; audio below it is
     untouched. Expects float audio, shape (n,) mono or (n, channels);
-    returns the same shape."""
-    board = Pedalboard([Compressor(threshold_db=threshold_db, ratio=ratio,
-                                   attack_ms=0.5, release_ms=100.0)])
-    audio = y.astype(np.float32)
-    if audio.ndim == 1:
-        return board(audio, sr).astype(y.dtype)
-    processed = board(audio.T, sr)
-    return processed.T.astype(y.dtype)
+    returns the same shape and dtype.
+
+    Feed-forward peak compressor, implemented directly in numpy. Attack is
+    instantaneous (at 20:1 the 0.5 ms attack of the previous pedalboard
+    implementation was already effectively a limiter); release is linear in
+    dB at ``release_db_per_s``, so a typical few-dB over recovers within
+    about 100 ms. Every channel receives the same gain, keyed to the loudest
+    channel, so the stereo image is not disturbed. No makeup gain.
+
+    The release is computed without a sample-by-sample loop: a linear-in-dB
+    decay from every past peak is the running maximum of
+    ``reduction[j] - k * (n - j)``, which rearranges to a cumulative max of
+    ``reduction + k * index`` minus ``k * index``.
+    """
+    x = np.asarray(y, dtype=np.float64)
+    if x.size == 0:
+        return y
+
+    level = np.abs(x) if x.ndim == 1 else np.max(np.abs(x), axis=1)
+    with np.errstate(divide="ignore"):          # log10(0) for silence -> -inf
+        level_db = 20.0 * np.log10(level)
+
+    over_db = np.maximum(level_db - threshold_db, 0.0)
+    reduction_db = over_db * (1.0 - 1.0 / ratio)
+
+    k = release_db_per_s / sr                    # dB recovered per sample
+    idx = np.arange(len(reduction_db), dtype=np.float64)
+    smoothed_db = np.maximum.accumulate(reduction_db + k * idx) - k * idx
+
+    gain = 10.0 ** (-smoothed_db / 20.0)
+    if x.ndim == 2:
+        gain = gain[:, None]
+    return (x * gain).astype(np.asarray(y).dtype)
 
 def apply_normalise(y: np.ndarray, sr: int, target_lufs: float = -14.0) -> np.ndarray:
     """Loudness-normalise to target integrated LUFS, then hard-limit
