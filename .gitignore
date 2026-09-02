@@ -7,7 +7,7 @@ db.sqlite3
 /media/
 /staticfiles/
 node_modules/
-static/css/site.css
 celerybeat-schedule
 celerybeat-schedule-shm
-celerybeat-schedule-wal
+celerybeat-schedule-wal.env.docker
+.env.docker
