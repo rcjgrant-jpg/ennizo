@@ -8,7 +8,8 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DJANGO_MANIFEST_STATIC=True
 
 # ffmpeg: record_sample transcodes browser recordings to WAV via subprocess.
 # libsndfile1: runtime library behind soundfile/librosa.

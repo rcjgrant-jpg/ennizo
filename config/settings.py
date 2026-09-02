@@ -233,13 +233,15 @@ if USE_S3_MEDIA:
 else:
     _media_storage = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
 
+if os.getenv("DJANGO_MANIFEST_STATIC") == "True":
+    _static_backend = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+else:
+    _static_backend = "whitenoise.storage.CompressedStaticFilesStorage"
+
 STORAGES = {
     "default": _media_storage,
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
+    "staticfiles": {"BACKEND": _static_backend},
 }
-
 
 # --- Production security -----------------------------------------------------------
 # Render (and most PaaS hosts) terminate HTTPS at their proxy and forward plain
