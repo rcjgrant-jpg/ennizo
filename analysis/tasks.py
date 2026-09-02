@@ -5,6 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from library.models import Sample, SampleTag, Tag, TagSource, TagStatus
+from library.storage import local_copy
 from .models import AnalysisStatus, DerivedMetadata
 from .pipeline import analyse, estimated_tag_names, measured_tag_names
 
@@ -33,7 +34,10 @@ def analyse_sample(self, sample_id):
     )
 
     try:
-        result = analyse(sample.audio_file.path)
+        # The pipeline needs a real file on disk. local_copy gives us one
+        # whether the audio lives in local media/ or in an S3-style bucket.
+        with local_copy(sample.audio_file) as path:
+            result = analyse(path)
 
         with transaction.atomic():
             for field in PIPELINE_FIELDS:

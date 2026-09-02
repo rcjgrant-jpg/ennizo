@@ -10,6 +10,7 @@ import numpy as np
 from scipy.signal import lfilter
 
 from library.models import Sample
+from library.storage import local_copy
 
 from pedalboard import Pedalboard, Compressor
 
@@ -83,7 +84,10 @@ def render_sample(sample_pk, params):
         logger.warning("render_sample: sample %s no longer exists", sample_pk)
         return
 
-    audio, sr = sf.read(sample.audio_file.path)
+    # soundfile reads by path; local_copy provides one whether the source
+    # is in local media/ or an S3-style bucket.
+    with local_copy(sample.audio_file) as path:
+        audio, sr = sf.read(path)
 
     trim_start = params.get("trim_start")
     trim_end = params.get("trim_end")
@@ -126,14 +130,11 @@ def render_sample(sample_pk, params):
             is_committed=False,
             rendered_from=sample,
         )
+        # FieldFile.save() goes through the configured storage backend, so
+        # this uploads to the bucket in production and writes to media/ locally.
         with open(temp_file_path, "rb") as f:
             new_sample.audio_file.save(f"{sample.pk}_render.wav", File(f), save=True)
     finally:
         os.remove(temp_file_path)
 
     return {"source": sample_pk, "render": new_sample.pk}
-    
-        
-    
-        
-        
