@@ -22,8 +22,6 @@
       </a>
     {% endif %}
 
-    {# Bio wraps onto its own full-width line; from sm up it is indented to
-       sit under the name rather than the avatar (24 = avatar 20 + gap 4). #}
     {% if profile_user.bio %}
       <p class="basis-full sm:pl-24 -mt-1 whitespace-pre-line break-words text-sm [&_a]:text-primary [&_a]:underline">{{ profile_user.bio|urlize }}</p>
     {% endif %}
