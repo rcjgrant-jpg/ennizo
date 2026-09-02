@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://ennizo-web.onrender.com",
+      "http://localhost:8000"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range"],
+    "ExposeHeaders": ["Content-Length", "Content-Range", "Accept-Ranges"],
+    "MaxAgeSeconds": 3600
+  }
+]
