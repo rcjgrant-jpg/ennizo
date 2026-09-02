@@ -8,9 +8,10 @@ from django.utils import timezone
 
 from library.models import Sample
 from .tasks import render_sample
+from django.contrib.auth.decorators import login_required
 
 
-
+@login_required
 @require_GET
 def render_status(request, pk):
     sample = get_object_or_404(
@@ -29,6 +30,7 @@ def render_status(request, pk):
         
     return JsonResponse({"done": False})
 
+
 def _page_context(request, sample):
     """Everything both the full page and the polled fragment need."""
 
@@ -40,6 +42,7 @@ def _page_context(request, sample):
         "eq_bands": [63, 125, 250, 500, 1000, 2000, 4000, 8000],
     }
 
+@login_required
 def edit_sample(request, pk):
     sample = get_object_or_404(
     Sample.objects.select_related("metadata"),
@@ -49,6 +52,7 @@ def edit_sample(request, pk):
     Sample.objects.filter(pk=pk).update(last_active_at=timezone.now())
     return render(request, "processing/edit_sample.html", _page_context(request, sample))
 
+@login_required
 @require_POST
 def render_sample_view(request, pk):
     sample = get_object_or_404(
@@ -90,7 +94,7 @@ def render_sample_view(request, pk):
     return JsonResponse({"ok": True, "after": latest.pk if latest else 0})
 
     
-    
+@login_required    
 def editor_home(request):
     return render(request, "processing/editor_home.html")    
 
