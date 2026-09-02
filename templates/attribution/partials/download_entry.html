@@ -24,7 +24,7 @@ the row updates in place and the dropdown collapses.
       </a>
     </div>
 
-    <details class="relative shrink-0">
+    <details class="relative shrink-0" {% if form.errors %}open{% endif %}>
       <summary class="border-border text-muted-foreground hover:text-foreground cursor-pointer list-none rounded-md border px-3 py-1.5 text-xs select-none">
         Credit
       </summary>
