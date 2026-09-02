@@ -17,7 +17,6 @@ services:
     dockerfilePath: ./Dockerfile
     plan: starter
     region: frankfurt
-    healthCheckPath: /accounts/login/
     # Runs once per deploy, before the new version receives traffic.
     preDeployCommand: python manage.py migrate --noinput
     envVars:
@@ -25,8 +24,10 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
+      # One gunicorn worker: the smallest instance has 512 MB and each worker
+      # holds a full copy of the Django process. Raise only with a bigger plan.
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
       - key: DATABASE_URL
         fromDatabase:
           name: ennizo-db
