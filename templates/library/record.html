@@ -10,6 +10,15 @@
   {# Live waveform #}
   <div id="waveform" class="w-full max-w-2xl h-32 mb-8 rounded-lg bg-muted/30"></div>
 
+  {# Input device — populated once the browser grants microphone access #}
+  <div class="flex items-center gap-3 mb-6">
+    <label for="device-select" class="text-sm text-muted-foreground">Input</label>
+    <select id="device-select"
+            class="w-72 rounded-md border border-border bg-background px-3 py-2 text-sm">
+      <option value="">Default microphone</option>
+    </select>
+  </div>
+
   {# Transport #}
 
   <div class="flex items-center gap-6 mb-8">
@@ -61,6 +70,7 @@
     const titleInput = document.getElementById("title-input");
     const folderSelect = document.getElementById("folder-select");
     const errorMsg = document.getElementById("error-msg");
+    const deviceSelect = document.getElementById("device-select");
 
     let recordedBlob = null;
 
@@ -76,10 +86,32 @@
       plugins: [record],
     });
 
+    // Browsers hide device names until the page has been granted microphone
+    // access once, so ask for it up front, release the stream immediately,
+    // then list what is available. If the user refuses, the picker simply
+    // stays on "Default microphone" and recording will re-prompt.
+    async function populateDevices() {
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+        probe.getTracks().forEach((t) => t.stop());
+      } catch (err) {
+        return;
+      }
+      const devices = await WaveSurfer.Record.getAvailableAudioDevices();
+      devices.forEach((d, i) => {
+        const opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ("Microphone " + (i + 1));
+        deviceSelect.appendChild(opt);
+      });
+    }
+    populateDevices();
+
     record.on("record-end", (blob) => {
       recordedBlob = blob;
       recordBtn.disabled = false;
       stopBtn.disabled = true;
+      deviceSelect.disabled = false;
       if (!titleInput.value) {
         titleInput.value = "Recording " + new Date().toLocaleString();
       }
@@ -91,9 +123,17 @@
       recordedBlob = null;
       confirmPanel.classList.add("hidden");
       confirmPanel.classList.remove("flex");
-      await record.startRecording();
-      recordBtn.disabled = true;
-      stopBtn.disabled = false;
+      errorMsg.classList.add("hidden");
+      try {
+        const opts = deviceSelect.value ? { deviceId: deviceSelect.value } : {};
+        await record.startRecording(opts);
+        recordBtn.disabled = true;
+        stopBtn.disabled = false;
+        deviceSelect.disabled = true;
+      } catch (err) {
+        errorMsg.textContent = "Could not start recording: " + err.message;
+        errorMsg.classList.remove("hidden");
+      }
     });
 
     stopBtn.addEventListener("click", () => {
@@ -128,4 +168,3 @@
     });
   </script>
 {% endblock %}
-</script>

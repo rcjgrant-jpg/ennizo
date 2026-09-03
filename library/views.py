@@ -1,4 +1,3 @@
-# library/views.py
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -206,7 +205,6 @@ def record_sample(request):
                         save=True,
                     )
 
-        messages.success(request, f"“{sample.title}” recorded.")
         return JsonResponse(
             {"redirect": reverse("analysis:sample_analysis", args=[sample.pk])}
         )
@@ -270,7 +268,6 @@ def upload(request):
                         sample=sample, tag=tag, source=TagSource.USER
                     )
 
-            messages.success(request, f"“{sample.title}” uploaded.")
             return redirect("analysis:sample_analysis", pk=sample.pk)
     else:
         form = SampleUploadForm(user=request.user)

@@ -5,8 +5,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from library.models import Sample, SampleTag, Tag, TagSource, TagStatus
+from library.storage import local_copy
 from .models import AnalysisStatus, DerivedMetadata
-from .pipeline import analyse, estimated_tag_names, measured_tag_names
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,17 @@ def analyse_sample(self, sample_id):
     )
 
     try:
-        result = analyse(sample.audio_file.path)
+        # Imported here rather than at module level: this module is loaded by
+        # every process at startup (the web workers included, via
+        # analysis.signals), but only the Celery worker ever runs the
+        # pipeline. Deferring the import keeps librosa and Essentia — several
+        # hundred MB resident — out of the web process entirely.
+        from .pipeline import analyse
+
+        # The pipeline needs a real file on disk. local_copy gives us one
+        # whether the audio lives in local media/ or in an S3-style bucket.
+        with local_copy(sample.audio_file) as path:
+            result = analyse(path)
 
         with transaction.atomic():
             for field in PIPELINE_FIELDS:
@@ -60,6 +70,8 @@ def _write_derived_tags(sample, result):
     """Container facts are written ACCEPTED — they are measurements. Tempo and
     key are written SUGGESTED, because they are algorithmic estimates and the
     user is the authority on whether they are right."""
+    from .pipeline import estimated_tag_names, measured_tag_names
+
     for name in measured_tag_names(result):
         _write_tag(sample, name, TagStatus.ACCEPTED, None)
 

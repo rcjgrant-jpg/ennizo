@@ -1,0 +1,93 @@
+
+services:
+  # ---------------------------------------------------------------- web ----
+  - type: web
+    name: ennizo-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: frankfurt
+    
+    preDeployCommand: python manage.py migrate --noinput
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ennizo-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ennizo-redis
+          property: connectionString
+      # --- media bucket (S3 or Cloudflare R2) ---
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false          # R2: https://<account-id>.r2.cloudflarestorage.com ; leave empty for AWS
+      - key: AWS_S3_REGION_NAME
+        sync: false          # R2: auto ; AWS: e.g. eu-west-2
+
+  # ------------------------------------------------------------- worker ----
+  # Single worker with embedded beat (-B). Acceptable because there is exactly
+  # one worker; two would each run the reaper. --concurrency=1 keeps memory
+  # to one copy of the audio libraries.
+  - type: worker
+    name: ennizo-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: celery -A config worker -B --loglevel=info --concurrency=1
+    plan: standard
+    region: frankfurt
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: ennizo-web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ennizo-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ennizo-redis
+          property: connectionString
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        sync: false
+
+  # -------------------------------------------------------------- redis ----
+  - type: keyvalue
+    name: ennizo-redis
+    plan: free
+    region: frankfurt
+    ipAllowList: []          
+    maxmemoryPolicy: noeviction  
+
+databases:
+  - name: ennizo-db
+    plan: free               
+    region: frankfurt
+    databaseName: ennizo
+    user: ennizo
