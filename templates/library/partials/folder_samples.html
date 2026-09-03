@@ -30,6 +30,20 @@
         <span class="text-muted-foreground shrink-0 text-xs">Private</span>
       {% endif %}
 
+     
+      <a href="{% url 'attribution:download_sample' sample.pk %}"
+         title="Download"
+         class="text-muted-foreground hover:text-foreground hover:bg-muted grid h-8 w-8 shrink-0 place-items-center rounded-md">
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none"
+             stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" x2="12" y1="15" y2="3"/>
+        </svg>
+        <span class="sr-only">Download {{ sample.title }}</span>
+      </a>
+
       <details class="relative shrink-0">
         <summary class="text-muted-foreground hover:text-foreground grid h-8 w-8 cursor-pointer list-none place-items-center rounded-md">
           &#8943;
