@@ -23,10 +23,7 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory-policy noeviction
 
-  # platform: linux/amd64 on web and worker is required on Apple Silicon Macs.
-  # The pinned Essentia build has no Linux ARM wheel, and Render runs x86_64
-  # anyway, so we build the same architecture that will deploy. Docker Desktop
-  # emulates it; expect the build and audio analysis to be slower than native.
+  
   web:
     build: .
     platform: linux/amd64

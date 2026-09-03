@@ -1,13 +1,3 @@
-# Render Blueprint for Ennizo.
-# Render > New > Blueprint, point it at the repo; it creates everything below.
-#
-# Plan names and prices change — treat the `plan:` values as starting points
-# and check Render's current pricing page. The worker is the memory-hungry
-# process (librosa + Essentia + pedalboard load at import time), so it gets
-# the larger plan; the web process only serves pages and enqueues jobs.
-#
-# Four values are secrets Render cannot generate: the bucket credentials.
-# `sync: false` makes the dashboard prompt for them on first deploy.
 
 services:
   # ---------------------------------------------------------------- web ----
@@ -17,15 +7,14 @@ services:
     dockerfilePath: ./Dockerfile
     plan: starter
     region: frankfurt
-    # Runs once per deploy, before the new version receives traffic.
+    
     preDeployCommand: python manage.py migrate --noinput
     envVars:
       - key: DEBUG
         value: "False"
       - key: SECRET_KEY
         generateValue: true
-      # One gunicorn worker: the smallest instance has 512 MB and each worker
-      # holds a full copy of the Django process. Raise only with a bigger plan.
+      
       - key: WEB_CONCURRENCY
         value: "1"
       - key: DATABASE_URL
@@ -93,12 +82,12 @@ services:
     name: ennizo-redis
     plan: free
     region: frankfurt
-    ipAllowList: []          # internal access only
-    maxmemoryPolicy: noeviction   # a broker must never drop queued jobs
+    ipAllowList: []          
+    maxmemoryPolicy: noeviction  
 
 databases:
   - name: ennizo-db
-    plan: free               # free Postgres expires after a set period; fine for the assessment window
+    plan: free               
     region: frankfurt
     databaseName: ennizo
     user: ennizo
