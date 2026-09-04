@@ -127,21 +127,6 @@ class MetadataFilterTests(BaseLibraryTest):
         )
         return sample
 
-    def test_bpm_between_uses_pipeline_value(self):
-        """TC-LIB-010 (U3.1): pipeline BPM is filterable."""
-        inside = self._sample_with_meta("A", bpm=120.0)
-        outside = self._sample_with_meta("B", bpm=90.0)
-        result = Sample.objects.bpm_between(110, 130)
-        self.assertIn(inside, result)
-        self.assertNotIn(outside, result)
-
-    def test_bpm_override_takes_precedence(self):
-        """TC-LIB-011 (U1.5): a user correction replaces the pipeline BPM in
-        every filter — the override is the effective value, not an annotation.
-        """
-        corrected = self._sample_with_meta("C", bpm=90.0, bpm_override=124.0)
-        self.assertIn(corrected, Sample.objects.bpm_between(120, 130))
-        self.assertNotIn(corrected, Sample.objects.bpm_between(85, 95))
 
     def test_in_key_honours_tonic_override(self):
         """TC-LIB-012 (U1.5, U3.1): key filtering also coalesces overrides."""

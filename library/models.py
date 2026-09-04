@@ -57,13 +57,6 @@ class SampleQuerySet(models.QuerySet):
     def with_metadata(self):
         return self.select_related("metadata")
 
-    def bpm_between(self, low, high):
-        """Honours the user override where one exists (U3.1)."""
-        return self.annotate(
-            effective_bpm=models.functions.Coalesce(
-                "metadata__bpm_override", "metadata__bpm"
-            )
-        ).filter(effective_bpm__gte=low, effective_bpm__lte=high)
 
     def in_key(self, tonic, mode=None):
         qs = self.annotate(
