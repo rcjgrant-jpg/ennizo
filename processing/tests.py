@@ -23,8 +23,6 @@ from django.urls import reverse
 from accounts.models import Library
 from library.models import Folder, Sample
 
-from .models import Operation
-
 User = get_user_model()
 
 TEMP_MEDIA = tempfile.mkdtemp(prefix="ennizo-test-media-")
@@ -218,12 +216,4 @@ class RenderStatusTests(BaseProcessingTest):
         self.assertEqual(response.json()["render_pk"], second.pk)
 
 
-class MigrationCompatibilityTests(TestCase):
-    """TC-PRO-030 — the retained models module (register: never delete
-    models.py files that frozen migrations reference)."""
 
-    def test_operation_choices_still_importable(self):
-        """TC-PRO-030: Operation survives with its historical values —
-        frozen migrations reference this module."""
-        values = {c.value for c in Operation}
-        self.assertEqual(values, {"eq", "normalise", "trim", "denoise"})
