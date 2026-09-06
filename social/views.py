@@ -136,9 +136,14 @@ def _comments_context(post, form):
 def index(request):
     context = _feed_context(request)
     context["form"] = DraftForm(user=request.user) if "compose" in request.GET else None
-    context["publish_form"] = PublishForm() if "compose" in request.GET else None
     draft = Post.objects.drafts_for(request.user).select_related("sample__metadata").first()
     context["draft"] = draft
+    if "compose" in request.GET:
+        context["publish_form"] = (
+            PublishForm.for_sample(draft.sample) if draft else PublishForm()
+        )
+    else:
+        context["publish_form"] = None
 
     if request.headers.get("HX-Request") and not request.headers.get("HX-History-Restore-Request"):
         return render(request, "social/partials/feed_root.html", context)
@@ -176,6 +181,7 @@ def create_draft(request):
         "post": post,
         "sample": sample,
         "metadata": getattr(sample, "metadata", None),
+        "publish_form": PublishForm.for_sample(sample),
     })
 
 
@@ -189,6 +195,7 @@ def draft_state(request, pk):
         "post": post,
         "sample": post.sample,
         "metadata": getattr(post.sample, "metadata", None),
+        "publish_form": PublishForm.for_sample(post.sample),
     })
 
 
@@ -212,15 +219,26 @@ def publish_draft(request):
     form = PublishForm(request.POST, instance=post)
 
     if not form.is_valid():
-        return render(request, "social/partials/composer_draft.html", {
+        # The composer form targets itself for the success redirect; a
+        # validation failure must instead redraw only the attach panel, or
+        # the partial would replace the whole form. HX-Retarget overrides
+        # the target for this one response.
+        response = render(request, "social/partials/composer_draft.html", {
             "post": post,
             "sample": post.sample,
             "metadata": getattr(post.sample, "metadata", None),
-            "form": form,
+            "publish_form": form,
         })
+        response["HX-Retarget"] = "#composer-attach"
+        response["HX-Reswap"] = "outerHTML"
+        return response
 
     with transaction.atomic():
         post = form.save()
+        # Provenance travels with the sample (E5): a declaration made when
+        # posting is a fact about the recording, not about the post.
+        post.sample.origin = form.cleaned_data["origin"]
+        post.sample.licence = form.cleaned_data["licence"]
         # Suggestions the user neither kept nor removed are accepted on
         # publication. Discarding them instead would mean the classifier
         # contributes nothing unless every chip is clicked, which penalises
@@ -234,7 +252,7 @@ def publish_draft(request):
             post.publish()
             
         post.sample.is_committed = True
-        post.sample.save(update_fields=["is_committed"])
+        post.sample.save(update_fields=["is_committed", "origin", "licence"])
 
     messages.success(request, "Posted.")
     return _client_redirect(request, "social:index")

@@ -14,6 +14,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Library
+from analysis.models import AnalysisStatus, DerivedMetadata
 from library.models import Folder, Sample
 from social.models import Post
 
@@ -85,6 +86,37 @@ class DownloadEligibilityTests(BaseAttributionTest):
         disposition = response.headers["Content-Disposition"]
         self.assertIn("attachment", disposition)
         self.assertIn("dusty-break.wav", disposition)
+
+    def test_filename_carries_tempo_and_key(self):
+        """TC-ATT-006 (U4.2): once analysed, the download filename embeds BPM
+        and key so they survive outside the platform. Unanalysed samples
+        (TC-ATT-002) keep the plain title."""
+        sample = make_sample(self.folder, title="Dusty Break", public=True)
+        # The analysis app creates the metadata row on sample save; update it
+        # rather than inserting a second one.
+        DerivedMetadata.objects.filter(sample=sample).update(
+            status=AnalysisStatus.COMPLETE, bpm=93.4, tonic=0, mode="minor",
+        )
+        response = self.client.get(
+            reverse("attribution:download_sample", args=[sample.pk])
+        )
+        self.assertIn(
+            "dusty-break_93bpm_c-minor.wav",
+            response.headers["Content-Disposition"],
+        )
+
+    def test_filename_honours_user_corrections(self):
+        """TC-ATT-007 (U4.2, U1.5): an override wins over the detected value
+        in the exported name."""
+        sample = make_sample(self.folder, title="Loop", public=True)
+        DerivedMetadata.objects.filter(sample=sample).update(
+            status=AnalysisStatus.COMPLETE,
+            bpm=120.0, bpm_override=90.0, tonic=2, mode="major",
+        )
+        response = self.client.get(
+            reverse("attribution:download_sample", args=[sample.pk])
+        )
+        self.assertIn("loop_90bpm_d-major.wav", response.headers["Content-Disposition"])
 
     def test_posted_sample_downloadable_even_if_private(self):
         """TC-ATT-003: a published post makes its sample fetchable —

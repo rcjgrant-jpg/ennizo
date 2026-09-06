@@ -22,11 +22,21 @@ class SampleUploadForm(forms.ModelForm):
 
     class Meta:
         model = Sample
-        fields = ["title", "audio_file", "note", "is_public"]
+        fields = ["title", "audio_file", "note", "is_public", "origin", "licence"]
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["title"].required = False
+
+        # E5: both declarations are required and neither is pre-selected —
+        # the model default (UNKNOWN) exists for rows that predate the field,
+        # not as something a form should silently submit.
+        self.fields["origin"].required = True
+        self.fields["origin"].initial = ""
+        self.fields["origin"].choices = [("", "Choose…")] + list(Sample.Origin.choices)
+        self.fields["licence"].required = True
+        self.fields["licence"].initial = ""
+        self.fields["licence"].choices = [("", "Choose…")] + list(Sample.Licence.choices)
         self.fields["folder"].queryset = Folder.objects.filter(
             library__user=user
         ).order_by("name")

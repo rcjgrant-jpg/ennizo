@@ -51,6 +51,38 @@
       {% endfor %}
     </div>
 
+    <div class="grid gap-5 sm:grid-cols-2">
+      <div>
+        <label for="{{ form.origin.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+          Where did this come from?
+        </label>
+        <select name="origin" id="{{ form.origin.id_for_label }}"
+                class="bg-muted border-border w-full rounded-md border px-3 py-2 text-sm">
+          {% for value, label in form.origin.field.choices %}
+            <option value="{{ value }}" {% if form.origin.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% for error in form.origin.errors %}
+          <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+        {% endfor %}
+        <p class="text-muted-foreground mt-1 text-xs">Unknown or third-party recordings can be kept in your library but not posted.</p>
+      </div>
+      <div>
+        <label for="{{ form.licence.id_for_label }}" class="mb-1.5 block text-sm font-medium">
+          How may others use it?
+        </label>
+        <select name="licence" id="{{ form.licence.id_for_label }}"
+                class="bg-muted border-border w-full rounded-md border px-3 py-2 text-sm">
+          {% for value, label in form.licence.field.choices %}
+            <option value="{{ value }}" {% if form.licence.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% for error in form.licence.errors %}
+          <p class="text-destructive mt-1 text-xs">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
+
     <div>
       <label for="{{ form.note.id_for_label }}" class="mb-1.5 block text-sm font-medium">
         Note <span class="text-muted-foreground font-normal">(optional)</span>

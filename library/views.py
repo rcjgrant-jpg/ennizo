@@ -198,6 +198,9 @@ def record_sample(request):
                         folder=folder,
                         title=title,
                         is_committed=False,
+                        # Captured through the browser microphone: the one
+                        # entry point where origin is known without asking.
+                        origin=Sample.Origin.SELF_RECORDED,
                     )
                     sample.audio_file.save(
                         f"{slugify(title) or 'recording'}.wav",

@@ -117,7 +117,8 @@ class PublishFlowTests(BaseSocialTest):
         self.client.force_login(self.author)
         response = self.client.post(
             reverse("social:publish_draft"),
-            {"draft_pk": str(post.pk), "body": "First post"},
+            {"draft_pk": str(post.pk), "body": "First post",
+             "origin": "self_recorded", "licence": "cc_by"},
         )
         self.assertIn(response.status_code, (204, 302))
         post.refresh_from_db()
@@ -144,12 +145,62 @@ class PublishFlowTests(BaseSocialTest):
         self.client.force_login(self.author)
         self.client.post(
             reverse("social:publish_draft"),
-            {"draft_pk": str(post.pk), "body": ""},
+            {"draft_pk": str(post.pk), "body": "",
+             "origin": "self_recorded", "licence": "cc_by"},
         )
         keep.refresh_from_db()
         rejected.refresh_from_db()
         self.assertEqual(keep.status, TagStatus.ACCEPTED)
         self.assertEqual(rejected.status, TagStatus.REJECTED)
+
+    def test_publish_writes_provenance_onto_sample(self):
+        """TC-SOC-013 (U5.1, U5.2): the origin and licence declared in the
+        composer are stored on the sample, not the post — they describe the
+        recording."""
+        post, sample = self._draft()
+        self.client.force_login(self.author)
+        self.client.post(
+            reverse("social:publish_draft"),
+            {"draft_pk": str(post.pk), "body": "",
+             "origin": "licensed_pack", "licence": "cc_by_nc"},
+        )
+        sample.refresh_from_db()
+        self.assertEqual(sample.origin, Sample.Origin.LICENSED_PACK)
+        self.assertEqual(sample.licence, Sample.Licence.CC_BY_NC)
+
+    def test_unknown_origin_is_refused_at_publish(self):
+        """TC-SOC-014 (U5.4): a sample declared as unknown or third-party
+        origin cannot be posted. The draft and sample survive, so the user
+        can still keep it privately."""
+        post, sample = self._draft()
+        self.client.force_login(self.author)
+        response = self.client.post(
+            reverse("social:publish_draft"),
+            {"draft_pk": str(post.pk), "body": "",
+             "origin": "unknown", "licence": "cc_by"},
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["HX-Retarget"], "#composer-attach")
+        self.assertContains(response, "can&#x27;t be posted")
+        post.refresh_from_db()
+        sample.refresh_from_db()
+        self.assertFalse(post.is_published)
+        self.assertFalse(sample.is_committed)
+        self.assertTrue(Sample.objects.filter(pk=sample.pk).exists())
+
+    def test_publish_without_declaration_is_refused(self):
+        """TC-SOC-015 (U5.1): omitting the declaration entirely is a
+        validation failure, not a silent default."""
+        post, sample = self._draft()
+        self.client.force_login(self.author)
+        response = self.client.post(
+            reverse("social:publish_draft"),
+            {"draft_pk": str(post.pk), "body": "no declaration"},
+        )
+        self.assertEqual(response.status_code, 200)
+        post.refresh_from_db()
+        self.assertFalse(post.is_published)
 
     def test_cannot_publish_someone_elses_draft(self):
         """TC-SOC-012: the draft lookup is author-scoped — a 404 for anyone

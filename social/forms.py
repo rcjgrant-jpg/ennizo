@@ -60,8 +60,53 @@ class DraftForm(forms.Form):
 
 
 class PublishForm(forms.ModelForm):
-    """Phase two: the caption and tags, written onto an existing draft."""
+    """Phase two: the caption and tags, written onto an existing draft.
+
+    Also carries the sample's provenance declaration (E5). The fields belong
+    to Sample, not Post, so they are plain form fields here and the view
+    writes them onto post.sample; a ModelForm over two models would be more
+    machinery than two selects deserve.
+    """
     tags = forms.CharField(required=False)
+
+    _SELECT_CLASS = (
+        "bg-muted border-border w-full rounded-md border px-3 py-2 text-xs outline-none"
+    )
+
+    origin = forms.ChoiceField(                                     # U5.1
+        choices=[("", "Where did this sample come from?")] + list(Sample.Origin.choices),
+        required=True,
+        widget=forms.Select(attrs={"class": _SELECT_CLASS}),
+        error_messages={"required": "Say where the sample came from before posting."},
+    )
+    licence = forms.ChoiceField(                                    # U5.2
+        choices=[("", "How may others use it?")] + list(Sample.Licence.choices),
+        required=True,
+        widget=forms.Select(attrs={"class": _SELECT_CLASS}),
+        error_messages={"required": "Choose a licence before posting."},
+    )
+
+    @classmethod
+    def for_sample(cls, sample):
+        """Unbound form pre-filled from a sample's existing declaration, so a
+        library sample attached to a new post shows what was declared at
+        upload. UNKNOWN is left blank: it must be replaced, not confirmed."""
+        initial = {"licence": sample.licence}
+        if sample.origin != Sample.Origin.UNKNOWN:
+            initial["origin"] = sample.origin
+        return cls(initial=initial)
+
+    def clean_origin(self):
+        # U5.4: the gate. Unknown-origin material may sit in a library but
+        # is refused at publication, which is the point at which it would
+        # be offered to other people.
+        origin = self.cleaned_data["origin"]
+        if origin == Sample.Origin.UNKNOWN:
+            raise forms.ValidationError(
+                "Samples of unknown or third-party origin can't be posted. "
+                "You can still keep this one in your library."
+            )
+        return origin
 
     class Meta:
         model = Post

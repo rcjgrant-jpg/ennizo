@@ -22,6 +22,9 @@ the row updates in place and the dropdown collapses.
         {% include "partials/_avatar.html" with account=record.sample.owner size_class="h-4 w-4 text-[7px]" %}
         <span class="font-mono">@{{ record.sample.owner.username }}</span>
       </a>
+      <p class="text-muted-foreground mt-0.5 truncate text-xs">
+        {{ record.sample.licence_display }} · {{ record.sample.get_origin_display }}
+      </p>
     </div>
 
     <details class="relative shrink-0" {% if form.errors %}open{% endif %}>

@@ -24,6 +24,10 @@
       <p class="text-muted-foreground text-xs">
         {% if post.sample.metadata.bpm %}{{ post.sample.metadata.bpm }} BPM{% endif %}
       </p>
+      {# U5.3: what a downloader may do, stated before they download. #}
+      <p class="text-muted-foreground mt-0.5 truncate text-xs">
+        {{ post.sample.licence_display }} · {{ post.sample.get_origin_display }}
+      </p>
     </div>
   </div>
 

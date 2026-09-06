@@ -200,6 +200,24 @@ class SampleTag(models.Model):
 
 
 class Sample(models.Model):
+
+    class Origin(models.TextChoices):
+        """Where the audio came from (U5.1). A declaration by the uploader,
+        not a detection — the platform has no way to verify it, so the value
+        is recorded as an assertion and gates publication (U5.4)."""
+        SELF_RECORDED = "self_recorded", "Recorded by me"
+        SYNTHESISED = "synthesised", "Synthesised or programmed by me"
+        LICENSED_PACK = "licensed_pack", "From a sample pack I'm licensed to share"
+        UNKNOWN = "unknown", "Unknown or third-party recording"
+
+    class Licence(models.TextChoices):
+        """A small, plainly-worded set (U5.2). Modelled on the Creative
+        Commons tiers producers already recognise, but described in terms of
+        what a downloader may do rather than by licence code."""
+        CC0 = "cc0", "Free to use, no credit needed"
+        CC_BY = "cc_by", "Free to use with credit"
+        CC_BY_NC = "cc_by_nc", "Free for non-commercial use, with credit"
+
     folder = models.ForeignKey(
         Folder, on_delete=models.PROTECT, related_name="samples"
     )
@@ -215,6 +233,16 @@ class Sample(models.Model):
     
     is_public = models.BooleanField(default=False)          # U2.7
     note = models.TextField(blank=True)                     # U2.6
+
+    # Provenance (E5). UNKNOWN is the honest default for rows that predate
+    # the field and for composer uploads before the user has declared
+    # anything; publish_draft refuses to publish while it is still UNKNOWN.
+    origin = models.CharField(                              # U5.1
+        max_length=20, choices=Origin.choices, default=Origin.UNKNOWN
+    )
+    licence = models.CharField(                             # U5.2
+        max_length=20, choices=Licence.choices, blank=True, default=""
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_committed = models.BooleanField(default=True)
     last_active_at = models.DateTimeField(auto_now_add=True)
@@ -243,6 +271,16 @@ class Sample(models.Model):
     def owner(self):
         return self.folder.library.user
     
+    @property
+    def is_publishable(self):
+        """U5.4: unknown-origin material may live in a library but may not be
+        published to the feed."""
+        return self.origin != self.Origin.UNKNOWN
+
+    @property
+    def licence_display(self):
+        return self.get_licence_display() if self.licence else "Licence not stated"
+
     @property
     def has_published_post(self): 
         post = getattr(self, "post", None)

@@ -51,6 +51,27 @@
     </button>
   </div>
 
+  {# E5: origin and licence declared at the point of publication (U5.1,   #}
+  {# U5.2). hx-preserve keeps the user's selection across the 2s analysis   #}
+  {# poll, which otherwise swaps this whole panel and would reset it.      #}
+  <div id="provenance-fields" hx-preserve="true" class="grid gap-2 sm:grid-cols-2">
+    {{ publish_form.origin }}
+    {{ publish_form.licence }}
+  </div>
+  {% if publish_form.errors %}
+    <div class="space-y-1">
+      {% for error in publish_form.origin.errors %}
+        <p class="text-destructive text-xs">{{ error }}</p>
+      {% endfor %}
+      {% for error in publish_form.licence.errors %}
+        <p class="text-destructive text-xs">{{ error }}</p>
+      {% endfor %}
+      {% for error in publish_form.non_field_errors %}
+        <p class="text-destructive text-xs">{{ error }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   {% if sample.accepted_tags or sample.suggested_tags %}
     {# Locked in: review happens on the analysis page, not here. Suggested   #}
     {# tags render identically to accepted ones because publish accepts them. #}

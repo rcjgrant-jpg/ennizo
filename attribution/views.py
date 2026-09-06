@@ -28,6 +28,21 @@ def _downloadable(sample, user):
     )
 
 
+def _download_filename(sample):
+    """U4.2: the stored name is a UUID (see sample_upload_path); the browser
+    gets the title with tempo and key appended, so the two facts producers
+    said they most need survive outside the platform, in the one place a
+    DAW is certain to show them — the filename."""
+    parts = [slugify(sample.title) or "sample"]
+    meta = getattr(sample, "metadata", None)
+    if meta is not None and meta.is_analysed:
+        if meta.has_tempo:
+            parts.append(f"{round(meta.effective_bpm)}bpm")
+        if meta.is_pitched:
+            parts.append(slugify(meta.key_display))
+    return "_".join(parts)
+
+
 def _entry_context(request, record):
     """Context for one downloads-page entry, including the viewer's own
     credits against that sample so the entry can list them after submission."""
@@ -40,7 +55,7 @@ def _entry_context(request, record):
 @login_required
 def download_sample(request, pk):
     sample = get_object_or_404(
-        Sample.objects.select_related("folder__library__user"), pk=pk
+        Sample.objects.select_related("folder__library__user", "metadata"), pk=pk
     )
 
     if not _downloadable(sample, request.user):
@@ -53,10 +68,8 @@ def download_sample(request, pk):
             downloader=request.user, sample=sample
         )
 
-    # The stored filename is a UUID (see sample_upload_path); hand the
-    # browser something meaningful instead.
     ext = Path(sample.audio_file.name).suffix
-    filename = f"{slugify(sample.title) or 'sample'}{ext}"
+    filename = _download_filename(sample) + ext
     return FileResponse(
         sample.audio_file.open("rb"), as_attachment=True, filename=filename
     )

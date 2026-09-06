@@ -421,13 +421,16 @@ class DraftTagViewTests(BaseLibraryTest):
 class UploadFormTests(BaseLibraryTest):
     """TC-LIB-080..083 — upload validation (U1.8 formats, U2.3 tag cap)."""
 
-    def _form(self, filename="loop.wav", tags="", title=""):
+    def _form(self, filename="loop.wav", tags="", title="",
+              origin="self_recorded", licence="cc_by"):
         return SampleUploadForm(
             data={
                 "title": title,
                 "tags": tags,
                 "folder": self.alice_folder.pk,
                 "note": "",
+                "origin": origin,
+                "licence": licence,
             },
             files={
                 "audio_file": SimpleUploadedFile(filename, b"RIFFfakewavdata")
@@ -461,6 +464,24 @@ class UploadFormTests(BaseLibraryTest):
         eleven = ", ".join(f"t{i}" for i in range(11))
         form = self._form(tags=eleven)
         self.assertFalse(form.is_valid())
+
+    def test_origin_and_licence_required(self):
+        """TC-LIB-084 (U5.1, U5.2): the upload form refuses to submit
+        without an explicit origin and licence — the model default is not
+        offered as a choice."""
+        form = self._form(origin="", licence="")
+        self.assertFalse(form.is_valid())
+        self.assertIn("origin", form.errors)
+        self.assertIn("licence", form.errors)
+
+    def test_unknown_origin_allowed_into_library(self):
+        """TC-LIB-085 (U5.1, U5.4): declaring unknown origin is permitted at
+        upload — the library is private; the gate is at publication."""
+        form = self._form(origin="unknown", licence="cc_by")
+        self.assertTrue(form.is_valid())
+        self.assertFalse(
+            Sample(origin=form.cleaned_data["origin"]).is_publishable
+        )
 
 
 class SearchTests(BaseLibraryTest):

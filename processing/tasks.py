@@ -148,6 +148,10 @@ def render_sample(sample_pk, params):
             is_public=sample.is_public,
             is_committed=False,
             rendered_from=sample,
+            # A render is the same recording processed; its provenance is
+            # the source's provenance.
+            origin=sample.origin,
+            licence=sample.licence,
         )
         # FieldFile.save() goes through the configured storage backend, so
         # this uploads to the bucket in production and writes to media/ locally.
