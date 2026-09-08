@@ -46,14 +46,11 @@ def stash_replaced_avatar(sender, instance, **kwargs):
     """Record the outgoing avatar name if it is about to be replaced or cleared."""
     if not instance.pk:
         return
-    try:
-        old_name = (
-            sender.objects.filter(pk=instance.pk)
-            .values_list("avatar", flat=True)
-            .first()
-        )
-    except sender.DoesNotExist:
-        return
+    old_name = (
+        sender.objects.filter(pk=instance.pk)
+        .values_list("avatar", flat=True)
+        .first()
+    )
 
     new_name = instance.avatar.name if instance.avatar else ""
     if old_name and old_name != new_name:

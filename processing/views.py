@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.utils import timezone
 
 from library.models import Sample
-from .tasks import render_sample
+from .tasks import EQ_BANDS, render_sample
 from django.contrib.auth.decorators import login_required
 
 
@@ -22,7 +22,6 @@ def render_status(request, pk):
     if after:
         renders = renders.filter(pk__gt=int(after))
     latest = renders.first()
-    
     if latest:
         return JsonResponse(
             {"done": True, "render_pk": latest.pk, "url": latest.audio_file.url}
@@ -39,7 +38,7 @@ def _page_context(request, sample):
         "metadata": getattr(sample, "metadata", None),
         "is_owner": sample.folder.library.user_id == request.user.id,
         "active_page": "edit_sample",
-        "eq_bands": [63, 125, 250, 500, 1000, 2000, 4000, 8000],
+        "eq_bands": EQ_BANDS,
     }
 
 @login_required
@@ -93,11 +92,7 @@ def render_sample_view(request, pk):
     latest = sample.renders.order_by("-pk").first()
     return JsonResponse({"ok": True, "after": latest.pk if latest else 0})
 
-    
-@login_required    
+
+@login_required
 def editor_home(request):
-    return render(request, "processing/editor_home.html")    
-
-
-
-    
+    return render(request, "processing/editor_home.html")

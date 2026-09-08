@@ -1,13 +1,13 @@
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Exists, OuterRef
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import ProfileForm, RegisterForm
 from attribution.models import CreditRecord
 from library.models import Sample
-from social.models import Like, Post
+from social.models import Post
 
 from django.views.decorators.vary import vary_on_headers
 
@@ -76,16 +76,7 @@ def profile(request, username):
         context["posts"] = (
             Post.objects.published()
             .filter(author=profile_user)
-            .select_related("author", "sample__metadata")
-            .prefetch_related("sample__sample_tags__tag")
-            .annotate(
-                like_count=Count("likes", distinct=True),
-                comment_count=Count("comments", distinct=True),
-                download_count=Count("sample__downloads", distinct=True),
-                liked_by_user=Exists(
-                    Like.objects.filter(post=OuterRef("pk"), user=request.user)
-                ),
-            )
+            .for_cards(request.user)
             .order_by("-created_at")
         )
     elif tab == "samples":

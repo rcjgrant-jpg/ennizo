@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 
 
@@ -17,6 +17,25 @@ class PostQuerySet(models.QuerySet):
         if not user.is_authenticated:
             return self.published()
         return self.filter(Q(is_published=True) | Q(author=user))
+
+    def for_cards(self, viewer):
+        """Everything post_card.html needs, in one query: author, sample,
+        tags, counts, and whether the viewer has liked it. Shared by the feed
+        and the profile so the card renders identically in both."""
+        return (
+            self.select_related("author", "sample__metadata")
+            .prefetch_related("sample__sample_tags__tag")
+            .annotate(
+                # distinct on every Count: the three joins would otherwise
+                # multiply each other's rows.
+                like_count=Count("likes", distinct=True),
+                comment_count=Count("comments", distinct=True),
+                download_count=Count("sample__downloads", distinct=True),
+                liked_by_user=Exists(
+                    Like.objects.filter(post=OuterRef("pk"), user=viewer)
+                ),
+            )
+        )
 
 
 class Post(models.Model):

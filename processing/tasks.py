@@ -62,17 +62,15 @@ def apply_tame_peaks(y: np.ndarray, sr: int,
     return (x * gain).astype(np.asarray(y).dtype)
 
 def apply_normalise(y: np.ndarray, sr: int, target_lufs: float = -14.0) -> np.ndarray:
-    """Loudness-normalise to target integrated LUFS, then hard-limit
-    any inter-sample overs introduced by the gain change."""
-    if len(y) < int(0.4 * sr):
+    """Loudness-normalise to the target integrated LUFS. Overs introduced by
+    the gain change are handled downstream: tame_peaks if selected, and the
+    final peak-safety divide in render_sample regardless."""
+    if len(y) < int(0.4 * sr):          # pyloudnorm needs at least one 400 ms block
         return y
-    meter = pyln.Meter(sr)
-    loudness = meter.integrated_loudness(y)
-    if not np.isfinite(loudness):  # silence or near-silence
+    loudness = pyln.Meter(sr).integrated_loudness(y)
+    if not np.isfinite(loudness):       # silence or near-silence
         return y
-    normalised = pyln.normalize.loudness(y, loudness, target_lufs)
-    
-    return normalised
+    return pyln.normalize.loudness(y, loudness, target_lufs)
 
 def _peaking_coeffs(freq, sr, gain_db, q):
     """Biquad peaking-EQ coefficients per the Audio EQ Cookbook

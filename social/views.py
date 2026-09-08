@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Count, Exists, OuterRef
+from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -50,21 +50,7 @@ def _tag_url(selected, add=None, remove=None):
 
 
 def _feed_queryset(request, selected):
-    posts = (
-        Post.objects.published()
-        .select_related("author", "sample")
-        .prefetch_related("sample__sample_tags__tag")
-        .annotate(
-            like_count=Count("likes", distinct=True),
-            comment_count=Count("comments", distinct=True),
-            # distinct on every Count: the three joins would otherwise
-            # multiply each other's rows.
-            download_count=Count("sample__downloads", distinct=True),
-            liked_by_user=Exists(
-                Like.objects.filter(post=OuterRef("pk"), user=request.user)
-            ),
-        )
-    )
+    posts = Post.objects.published().for_cards(request.user)
 
     # One filter() call per tag = AND semantics: a post must carry every
     # selected tag, not any of them.
@@ -113,6 +99,16 @@ def _client_redirect(request, url_name):
         response["HX-Redirect"] = url
         return response
     return redirect(url)
+
+
+def _draft_context(post, publish_form=None):
+    """Context for the composer's attach panel (composer_draft.html)."""
+    return {
+        "post": post,
+        "sample": post.sample,
+        "metadata": getattr(post.sample, "metadata", None),
+        "publish_form": publish_form or PublishForm.for_sample(post.sample),
+    }
 
 
 def _comments_context(post, form):
@@ -177,12 +173,7 @@ def create_draft(request):
     if not request.headers.get("HX-Request"):
         return redirect(f"{reverse('social:index')}?compose=1")
 
-    return render(request, "social/partials/composer_draft.html", {
-        "post": post,
-        "sample": sample,
-        "metadata": getattr(sample, "metadata", None),
-        "publish_form": PublishForm.for_sample(sample),
-    })
+    return render(request, "social/partials/composer_draft.html", _draft_context(post))
 
 
 @login_required
@@ -191,12 +182,7 @@ def draft_state(request, pk):
     post = get_object_or_404(
         Post.objects.select_related("sample__metadata"), pk=pk, author=request.user
     )
-    return render(request, "social/partials/composer_draft.html", {
-        "post": post,
-        "sample": post.sample,
-        "metadata": getattr(post.sample, "metadata", None),
-        "publish_form": PublishForm.for_sample(post.sample),
-    })
+    return render(request, "social/partials/composer_draft.html", _draft_context(post))
 
 
 @login_required
@@ -223,12 +209,9 @@ def publish_draft(request):
         # validation failure must instead redraw only the attach panel, or
         # the partial would replace the whole form. HX-Retarget overrides
         # the target for this one response.
-        response = render(request, "social/partials/composer_draft.html", {
-            "post": post,
-            "sample": post.sample,
-            "metadata": getattr(post.sample, "metadata", None),
-            "publish_form": form,
-        })
+        response = render(
+            request, "social/partials/composer_draft.html", _draft_context(post, form)
+        )
         response["HX-Retarget"] = "#composer-attach"
         response["HX-Reswap"] = "outerHTML"
         return response
@@ -240,25 +223,20 @@ def publish_draft(request):
         post.sample.origin = form.cleaned_data["origin"]
         post.sample.licence = form.cleaned_data["licence"]
         # Suggestions the user neither kept nor removed are accepted on
-        # publication. Discarding them instead would mean the classifier
+        # publication. Discarding them instead would mean the pipeline
         # contributes nothing unless every chip is clicked, which penalises
         # the common case. Rejection remains an explicit act.
-        
-        
         SampleTag.objects.filter(
             sample=post.sample, status=TagStatus.SUGGESTED
         ).update(status=TagStatus.ACCEPTED)
         if not post.is_published:
             post.publish()
-            
+
         post.sample.is_committed = True
         post.sample.save(update_fields=["is_committed", "origin", "licence"])
 
     messages.success(request, "Posted.")
     return _client_redirect(request, "social:index")
-
-
-
 
 
 @login_required
