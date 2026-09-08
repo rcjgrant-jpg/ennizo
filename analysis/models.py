@@ -1,8 +1,43 @@
+import re
+
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
+
+# --- vocabulary shared by the pipeline (worker) and the views (web) ---------
+# This module has no audio imports, so the web process can use everything
+# here without loading librosa or Essentia. pipeline.py imports from here.
 
 PITCH_CLASSES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+
+MIN_TEMPO_DURATION = 2.0   # seconds; shorter clips get no tempo estimate and tag as one-shot
+
+# Confidence gates for the two estimate tags. Below these the pipeline stays
+# silent rather than suggesting something it is unsure of (U1.4).
+BPM_TAG_THRESHOLD = 0.4
+KEY_TAG_THRESHOLD = 0.6    # Essentia key strength; calibrated on the labelled set
+
+_BPM_TAG_RE = re.compile(r"^\d+bpm$")
+
+
+def tempo_tag_name(bpm):
+    return f"{int(round(bpm))}bpm"
+
+
+def key_tag_name(tonic, mode=""):
+    tonic_name = PITCH_CLASSES[tonic].replace("b", "flat").lower()
+    return f"{tonic_name}-{mode}" if mode else tonic_name
+
+
+_KEY_TAG_NAMES = frozenset(
+    key_tag_name(t, m) for t in range(12) for m in ("", "major", "minor")
+)
+
+
+def is_estimate_tag_name(name):
+    """True for names that encode tempo or key — the tags the metadata owns."""
+    return bool(_BPM_TAG_RE.match(name)) or name in _KEY_TAG_NAMES
 
 
 class AnalysisStatus(models.TextChoices):
@@ -45,7 +80,6 @@ class DerivedMetadata(models.Model):
         null=True, blank=True,
         validators=[MinValueValidator(0), MaxValueValidator(1)],
     )
-
     tonic = models.SmallIntegerField(
         null=True, blank=True,
         validators=[MinValueValidator(0), MaxValueValidator(11)],
@@ -55,15 +89,12 @@ class DerivedMetadata(models.Model):
         null=True, blank=True,
         validators=[MinValueValidator(0), MaxValueValidator(1)],
     )
-
-    instrument = models.CharField(max_length=50, blank=True)
-    instrument_confidence = models.FloatField(null=True, blank=True)
     quality_flags = models.JSONField(default=dict, blank=True)
 
     analysed_at = models.DateTimeField(null=True, blank=True)
     pipeline_version = models.CharField(max_length=20, blank=True)
 
-    # --- user corrections: kept separate so pipeline output survives ---
+    # --- user corrections: kept separate so pipeline output survives (U1.5) ---
     bpm_override = models.FloatField(null=True, blank=True)
     tonic_override = models.SmallIntegerField(
         null=True, blank=True,
@@ -102,7 +133,7 @@ class DerivedMetadata(models.Model):
     def __str__(self):
         return f"Metadata for sample {self.sample_id}"
 
-    # --- effective values ---
+    # --- effective values: the owner's correction wins over the estimate ---
 
     @property
     def effective_bpm(self):
@@ -180,4 +211,76 @@ class DerivedMetadata(models.Model):
         }
         return [labels[k] for k, v in self.quality_flags.items() if v and k in labels]
 
+    # --- tempo/key tags: derived from this row, never edited directly ------
 
+    def correct(self, *, bpm=None, tonic=None, mode=""):
+        """Record the owner's ruling on tempo and key (U1.5).
+
+        Overrides sit beside the pipeline values rather than replacing them,
+        so the measurement survives. The tempo/key tags are then regenerated
+        from the effective values: the owner corrects the number once and the
+        tags follow (S4).
+        """
+        self.bpm_override = bpm
+        self.tonic_override = tonic
+        self.mode_override = mode or ""
+        self.corrected_at = timezone.now()
+        self.save(update_fields=[
+            "bpm_override", "tonic_override", "mode_override", "corrected_at",
+        ])
+        self.sync_estimate_tags()
+
+    def estimate_tags(self):
+        """(name, source, status, confidence) for each tempo/key tag this
+        sample should carry. A corrected value is the owner's ruling and is
+        never confidence-gated; a pipeline estimate is a gated suggestion."""
+        from library.models import TagSource, TagStatus
+
+        wanted = []
+        if self.bpm_override is not None:
+            wanted.append((tempo_tag_name(self.bpm_override),
+                           TagSource.USER, TagStatus.ACCEPTED, None))
+        elif self.bpm and (self.bpm_confidence or 0) >= BPM_TAG_THRESHOLD:
+            wanted.append((tempo_tag_name(self.bpm),
+                           TagSource.DERIVED, TagStatus.SUGGESTED, self.bpm_confidence))
+
+        if self.tonic_override is not None:
+            wanted.append((key_tag_name(self.tonic_override, self.mode_override),
+                           TagSource.USER, TagStatus.ACCEPTED, None))
+        elif self.tonic is not None and (self.key_confidence or 0) >= KEY_TAG_THRESHOLD:
+            wanted.append((key_tag_name(self.tonic, self.mode),
+                           TagSource.DERIVED, TagStatus.SUGGESTED, self.key_confidence))
+        return wanted
+
+    def sync_estimate_tags(self):
+        """Make the sample's tempo/key tags match estimate_tags().
+
+        Called after analysis and after a correction. Stale estimate tags are
+        deleted, not marked rejected: the pipeline value is still on this row,
+        and a '118bpm' beside a corrected '124bpm' is exactly the contradiction
+        a correction exists to remove. Tags the user typed are never touched.
+        """
+        from library.models import SampleTag, Tag
+
+        wanted = {name: (src, status, conf)
+                  for name, src, status, conf in self.estimate_tags()}
+
+        for st in SampleTag.objects.filter(sample=self.sample).select_related("tag"):
+            if not is_estimate_tag_name(st.tag.name):
+                continue
+            if st.tag.name not in wanted:
+                st.delete()
+                continue
+            src, status, conf = wanted.pop(st.tag.name)
+            if (st.source, st.status, st.confidence) != (src, status, conf):
+                st.source, st.status, st.confidence = src, status, conf
+                st.save(update_fields=["source", "status", "confidence"])
+
+        for name, (src, status, conf) in wanted.items():
+            tag, _ = Tag.objects.get_or_create(
+                name=name, defaults={"kind": Tag.Kind.OBJECTIVE}
+            )
+            SampleTag.objects.create(
+                sample=self.sample, tag=tag, source=src, status=status,
+                confidence=None if conf is None else round(float(conf), 3),
+            )

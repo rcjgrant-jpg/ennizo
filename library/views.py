@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from .forms import FolderForm, SampleUploadForm
 
 from .models import Folder, Sample, SampleTag, Tag, TagSource, TagStatus
+from analysis.models import is_estimate_tag_name
 
 import subprocess
 import tempfile
@@ -43,16 +44,18 @@ def draft_tags(request, pk):
     panel redrawn from the database. Separate routes would differ only in the
     two lines that mutate a row.
     """
-    
-    
     sample = get_object_or_404(Sample.objects.in_library_of(request.user), pk=pk)
     action = request.POST.get("action")
     tag_pk = request.POST.get("tag_pk", "")
 
     if action == "add":
         name = (request.POST.get("tag_name") or "").strip().lower()[:100]
-        if name and len(sample.accepted_tags()) < 10:
-            
+        # Tempo and key are set through the correction control, not typed as
+        # tags — one way to rule on them. The cap (U2.3) is on descriptive
+        # tags: measured and estimate tags are objective and don't count.
+        descriptive = [st for st in sample.accepted_tags()
+                       if st.tag.kind == Tag.Kind.SUBJECTIVE]
+        if name and not is_estimate_tag_name(name) and len(descriptive) < 10:
             tag, _ = Tag.objects.get_or_create(
                 name=name, defaults={"kind": Tag.Kind.SUBJECTIVE}
             )
@@ -61,14 +64,12 @@ def draft_tags(request, pk):
                 defaults={"source": TagSource.USER, "status": TagStatus.ACCEPTED},
             )
             if not created:
-                
                 row.accept()
 
     elif action in ("keep", "remove") and tag_pk.isdigit():
         row = get_object_or_404(SampleTag, pk=tag_pk, sample=sample)
-        
         row.accept() if action == "keep" else row.reject()
-        
+
     open_raw = request.GET.get("open", "")
 
     return render(request, "library/partials/draft_tags.html", {
@@ -77,16 +78,23 @@ def draft_tags(request, pk):
         "adding": request.GET.get("adding") == "1",
     })
 
+def _folder_panel(request, folder):
+    """The folder's sample list, redrawn after any action on it."""
+    return render(request, "library/partials/folder_samples.html", {
+        "folder": folder,
+        "samples": folder.samples.committed()
+                                 .select_related("metadata")
+                                 .prefetch_related("sample_tags__tag"),
+        "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
+    })
+
+
 @login_required
 def folder_samples(request, pk):
     folder = get_object_or_404(Folder, pk=pk, library__user=request.user)
+    return _folder_panel(request, folder)
 
-    return render(request, "library/partials/folder_samples.html", {
-        "folder": folder,
-        "samples": folder.samples.committed().select_related("metadata").prefetch_related("sample_tags__tag"),
-        "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
-    })
-    
+
 @login_required
 def move_sample(request, pk):
     sample = get_object_or_404(Sample, pk=pk, folder__library__user=request.user)
@@ -99,11 +107,7 @@ def move_sample(request, pk):
         sample.folder = target
         sample.save(update_fields=["folder"])
 
-    return render(request, "library/partials/folder_samples.html", {
-        "folder": origin,
-        "samples": origin.samples.committed().select_related("metadata").prefetch_related("sample_tags__tag"),
-        "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
-    })
+    return _folder_panel(request, origin)
 
 
 @login_required
@@ -124,11 +128,7 @@ def delete_sample(request, pk):
                 "That sample can't be deleted while it's attached to a post.",
             )
 
-    return render(request, "library/partials/folder_samples.html", {
-        "folder": folder,
-        "samples": folder.samples.committed().select_related("metadata").prefetch_related("sample_tags__tag"),
-        "folders": Folder.objects.filter(library__user=request.user).order_by("name"),
-    })
+    return _folder_panel(request, folder)
 
 
 @login_required
@@ -221,7 +221,6 @@ def record_sample(request):
 @login_required
 @require_POST
 def discard_sample(request, pk):
-    
     sample = get_object_or_404(
         Sample,
         pk=pk,
@@ -240,7 +239,6 @@ def discard_sample(request, pk):
 @login_required
 @require_POST
 def commit_sample(request, pk):
-
     sample = get_object_or_404(Sample.objects.in_library_of(request.user), pk=pk)
     sample.is_committed = True
     sample.save(update_fields=["is_committed"])
@@ -266,7 +264,9 @@ def upload(request):
                 sample.save()
 
                 for name in form.cleaned_data["tags"]:
-                    tag, _ = Tag.objects.get_or_create(name=name)
+                    tag, _ = Tag.objects.get_or_create(
+                        name=name, defaults={"kind": Tag.Kind.SUBJECTIVE}
+                    )
                     SampleTag.objects.create(
                         sample=sample, tag=tag, source=TagSource.USER
                     )

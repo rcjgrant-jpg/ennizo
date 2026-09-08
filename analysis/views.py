@@ -1,14 +1,14 @@
 # analysis/views.py
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from library.models import Sample
 from social.models import Post
 
-from .models import AnalysisStatus, DerivedMetadata
+from .models import PITCH_CLASSES, AnalysisStatus, DerivedMetadata
 from .tasks import analyse_sample
-from django.utils import timezone
 
 
 # --- helpers -----------------------------------------------------------------
@@ -31,7 +31,7 @@ def _get_owned_sample(request, pk):
     )
 
 
-def _page_context(request, sample):
+def _page_context(request, sample, **extra):
     """Everything both the full page and the polled fragment need."""
     try:
         post = sample.post
@@ -43,8 +43,32 @@ def _page_context(request, sample):
         "metadata": getattr(sample, "metadata", None),
         "post": post,
         "is_owner": sample.folder.library.user_id == request.user.id,
+        "pitch_classes": PITCH_CLASSES,     # key dropdown in the correction control
         "active_page": "library",
+        **extra,
     }
+
+
+def _parse_correction(post):
+    """Validate the correction control's three fields. Returns (values, error).
+    A blank field means 'keep the measured value' for that field."""
+    bpm = post.get("bpm", "").strip()
+    tonic = post.get("tonic", "").strip()
+    mode = post.get("mode", "").strip()
+    try:
+        bpm = float(bpm) if bpm else None
+        tonic = int(tonic) if tonic else None
+    except ValueError:
+        return None, "Tempo and key must be numbers."
+    if bpm is not None and not 20 <= bpm <= 400:
+        return None, "Tempo must be between 20 and 400 BPM."
+    if tonic is not None and not 0 <= tonic <= 11:
+        return None, "Unknown key."
+    if mode and mode not in DerivedMetadata.Mode.values:
+        return None, "Unknown mode."
+    if mode and tonic is None:
+        return None, "Choose a key before choosing major or minor."
+    return {"bpm": bpm, "tonic": tonic, "mode": mode}, None
 
 
 # --- views -------------------------------------------------------------------
@@ -79,3 +103,23 @@ def retry_analysis(request, pk):
     if not request.headers.get("HX-Request"):
         return redirect("analysis:sample_analysis", pk=sample.pk)
     return render(request, "analysis/_analysis_state.html", _page_context(request, sample))
+
+
+@login_required
+@require_POST
+def correct_metadata(request, pk):
+    """U1.5: the owner overrides tempo and/or key. The tempo/key tags are
+    regenerated from the corrected values (DerivedMetadata.correct), so the
+    owner rules once and the tags follow."""
+    sample = _get_owned_sample(request, pk)
+
+    values, error = _parse_correction(request.POST)
+    if error is None:
+        sample.metadata.correct(**values)
+
+    if not request.headers.get("HX-Request"):
+        return redirect("analysis:sample_analysis", pk=sample.pk)
+    return render(
+        request, "analysis/_analysis_state.html",
+        _page_context(request, sample, correction_error=error),
+    )

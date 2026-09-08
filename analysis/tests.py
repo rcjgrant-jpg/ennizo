@@ -15,15 +15,16 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Library
-from library.models import Folder, Sample
+from library.models import Folder, Sample, SampleTag, Tag, TagSource, TagStatus
 
-from .models import AnalysisStatus, DerivedMetadata, PITCH_CLASSES
-from .pipeline import (
-    ENHARMONIC,
+from .models import (
     KEY_TAG_THRESHOLD,
-    estimated_tag_names,
-    measured_tag_names,
+    PITCH_CLASSES,
+    AnalysisStatus,
+    DerivedMetadata,
+    is_estimate_tag_name,
 )
+from .pipeline import ENHARMONIC, measured_tag_names
 
 User = get_user_model()
 
@@ -50,6 +51,23 @@ def make_sample(folder, title="Kick", committed=True, public=False):
     return sample
 
 
+def analysed_meta(folder, **fields):
+    """A sample whose analysis has 'completed' with the given values, its
+    estimate tags written exactly as the pipeline task would write them."""
+    sample = make_sample(folder, title=f"S{DerivedMetadata.objects.count()}")
+    DerivedMetadata.objects.filter(sample=sample).update(
+        status=AnalysisStatus.COMPLETE, **fields
+    )
+    meta = DerivedMetadata.objects.get(sample=sample)
+    meta.sync_estimate_tags()
+    return meta
+
+
+def tag_rows(sample):
+    return {st.tag.name: st
+            for st in SampleTag.objects.filter(sample=sample).select_related("tag")}
+
+
 class EnharmonicTests(TestCase):
     """TC-ANA-001..002 — pipeline-boundary normalisation (U1.2 key
     detection; register: sharps normalised to the flat canonical set)."""
@@ -68,38 +86,42 @@ class EnharmonicTests(TestCase):
         self.assertFalse(any("#" in name for name in PITCH_CLASSES))
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA)
 class TagNamingTests(TestCase):
-    """TC-ANA-010..014 — deterministic tag naming from a result dict
-    (U1.1 BPM, U1.2 key, U1.4 confidence gating)."""
+    """TC-ANA-010..015 — estimate tags derived from metadata (U1.1 BPM,
+    U1.2 key, U1.4 confidence gating); container-fact tags from the result."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = make_user("owner")
+        cls.folder = Folder.objects.create(library=cls.owner.library, name="Drums")
 
     def test_bpm_tag_rounded_and_gated(self):
         """TC-ANA-010 (U1.1, U1.4): a confident BPM becomes '120bpm'; an
         unconfident one produces no tag."""
-        confident = {"bpm": 119.7, "bpm_confidence": 0.8}
-        self.assertEqual(estimated_tag_names(confident), [("120bpm", 0.8)])
-        unsure = {"bpm": 119.7, "bpm_confidence": 0.2}
-        self.assertEqual(estimated_tag_names(unsure), [])
+        confident = analysed_meta(self.folder, bpm=119.7, bpm_confidence=0.8)
+        self.assertEqual(set(tag_rows(confident.sample)), {"120bpm"})
+        unsure = analysed_meta(self.folder, bpm=119.7, bpm_confidence=0.2)
+        self.assertEqual(tag_rows(unsure.sample), {})
 
     def test_key_tag_formats_flat_before_lowercasing(self):
         """TC-ANA-011 (U1.2): tonic 10 (Bb) minor renders as 'bflat-minor'.
         The replace('b','flat') must run before .lower(): lowercasing first
         would turn 'Bb' into 'bb' and the tag into 'flatflat'."""
-        result = {"tonic": 10, "mode": "minor", "key_confidence": 0.9}
-        self.assertEqual(estimated_tag_names(result), [("bflat-minor", 0.9)])
+        meta = analysed_meta(self.folder, tonic=10, mode="minor", key_confidence=0.9)
+        self.assertEqual(set(tag_rows(meta.sample)), {"bflat-minor"})
 
     def test_natural_key_tag_has_no_flat(self):
         """TC-ANA-012 (U1.2): tonic 0 (C) major renders as 'c-major'."""
-        result = {"tonic": 0, "mode": "major", "key_confidence": 0.9}
-        self.assertEqual(estimated_tag_names(result), [("c-major", 0.9)])
+        meta = analysed_meta(self.folder, tonic=0, mode="major", key_confidence=0.9)
+        self.assertEqual(set(tag_rows(meta.sample)), {"c-major"})
 
     def test_key_tag_gated_by_threshold(self):
         """TC-ANA-013 (U1.4): a key below KEY_TAG_THRESHOLD yields no tag —
         unreliable estimates are suggestions withheld, not asserted."""
-        result = {
-            "tonic": 10, "mode": "minor",
-            "key_confidence": KEY_TAG_THRESHOLD - 0.01,
-        }
-        self.assertEqual(estimated_tag_names(result), [])
+        meta = analysed_meta(self.folder, tonic=10, mode="minor",
+                             key_confidence=KEY_TAG_THRESHOLD - 0.01)
+        self.assertEqual(tag_rows(meta.sample), {})
 
     def test_measured_tags_from_container_facts(self):
         """TC-ANA-014: duration and channel count are facts, not estimates
@@ -117,6 +139,14 @@ class TagNamingTests(TestCase):
             [],
         )
 
+    def test_estimate_tag_names_are_recognised(self):
+        """TC-ANA-015: the metadata recognises the names it owns, and only
+        those — a user's own tag is never mistaken for an estimate."""
+        for name in ("120bpm", "c", "bflat-minor", "gflat-major"):
+            self.assertTrue(is_estimate_tag_name(name), name)
+        for name in ("dusty", "loop", "mono", "bpm", "minor"):
+            self.assertFalse(is_estimate_tag_name(name), name)
+
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA)
 class MetadataModelTests(TestCase):
@@ -126,9 +156,7 @@ class MetadataModelTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.owner = make_user("owner")
-        cls.folder = Folder.objects.create(
-            library=cls.owner.library, name="Drums"
-        )
+        cls.folder = Folder.objects.create(library=cls.owner.library, name="Drums")
 
     def _meta(self, **fields):
         sample = make_sample(self.folder, title=f"S{DerivedMetadata.objects.count()}")
@@ -191,9 +219,7 @@ class AnalysisViewTests(TestCase):
     def setUpTestData(cls):
         cls.owner = make_user("owner")
         cls.stranger = make_user("stranger")
-        cls.folder = Folder.objects.create(
-            library=cls.owner.library, name="Drums"
-        )
+        cls.folder = Folder.objects.create(library=cls.owner.library, name="Drums")
 
     def test_private_sample_analysis_hidden_from_strangers(self):
         """TC-ANA-040 (U2.7): the analysis page of a private sample is a
@@ -201,9 +227,7 @@ class AnalysisViewTests(TestCase):
         sample = make_sample(self.folder, public=False)
         client = Client()
         client.force_login(self.stranger)
-        response = client.get(
-            reverse("analysis:sample_analysis", args=[sample.pk])
-        )
+        response = client.get(reverse("analysis:sample_analysis", args=[sample.pk]))
         self.assertEqual(response.status_code, 404)
 
     def test_page_view_renews_lease_on_uncommitted_sample(self):
@@ -234,7 +258,86 @@ class AnalysisViewTests(TestCase):
         sample = make_sample(self.folder)
         client = Client()
         client.force_login(self.stranger)
+        response = client.post(reverse("analysis:retry_analysis", args=[sample.pk]))
+        self.assertEqual(response.status_code, 404)
+
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA)
+class CorrectionTests(TestCase):
+    """TC-ANA-050..055 — owner correction of tempo/key (U1.5) and the rule
+    that estimate tags are derived from the effective value (S4: the owner
+    corrects the number once; the tags follow)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = make_user("owner")
+        cls.stranger = make_user("stranger")
+        cls.folder = Folder.objects.create(library=cls.owner.library, name="Keys")
+
+    def test_pipeline_writes_suggestions_with_confidence(self):
+        """TC-ANA-050: confident estimates become SUGGESTED, DERIVED tags
+        carrying the pipeline's confidence."""
+        meta = analysed_meta(self.folder, bpm=118.0, bpm_confidence=0.7,
+                             tonic=6, mode="minor", key_confidence=0.8)
+        tags = tag_rows(meta.sample)
+        self.assertEqual(set(tags), {"118bpm", "gflat-minor"})
+        self.assertEqual(tags["118bpm"].status, TagStatus.SUGGESTED)
+        self.assertEqual(tags["118bpm"].source, TagSource.DERIVED)
+        self.assertEqual(tags["118bpm"].confidence, 0.7)
+
+    def test_correction_replaces_estimate_tags(self):
+        """TC-ANA-051 (U1.5, S4): correcting tempo and key deletes the wrong
+        suggestions and writes ACCEPTED, USER-sourced tags in their place;
+        the measurement survives on the metadata row."""
+        meta = analysed_meta(self.folder, bpm=118.0, bpm_confidence=0.7,
+                             tonic=6, mode="minor", key_confidence=0.8)
+        meta.correct(bpm=124.0, tonic=0, mode="minor")
+        tags = tag_rows(meta.sample)
+        self.assertEqual(set(tags), {"124bpm", "c-minor"})
+        self.assertEqual(tags["124bpm"].status, TagStatus.ACCEPTED)
+        self.assertEqual(tags["124bpm"].source, TagSource.USER)
+        self.assertIsNone(tags["124bpm"].confidence)
+        meta.refresh_from_db()
+        self.assertEqual(meta.bpm, 118.0)
+        self.assertIsNotNone(meta.corrected_at)
+
+    def test_correction_is_never_confidence_gated(self):
+        """TC-ANA-052: a low-confidence estimate produced no tag; the owner's
+        correction produces one regardless."""
+        meta = analysed_meta(self.folder, bpm=118.0, bpm_confidence=0.1)
+        self.assertEqual(tag_rows(meta.sample), {})
+        meta.correct(bpm=90.0)
+        self.assertEqual(set(tag_rows(meta.sample)), {"90bpm"})
+
+    def test_correction_leaves_user_tags_alone(self):
+        """TC-ANA-053: only estimate-shaped names are owned by the metadata;
+        a user's descriptive tag survives a correction untouched."""
+        meta = analysed_meta(self.folder, bpm=118.0, bpm_confidence=0.7)
+        dusty = Tag.objects.create(name="dusty", kind=Tag.Kind.SUBJECTIVE)
+        SampleTag.objects.create(sample=meta.sample, tag=dusty, source=TagSource.USER)
+        meta.correct(bpm=124.0)
+        self.assertIn("dusty", tag_rows(meta.sample))
+
+    def test_reanalysis_respects_correction(self):
+        """TC-ANA-054: after a correction, a fresh pipeline run (new estimate
+        values, sync called again) leaves the owner's tags in place."""
+        meta = analysed_meta(self.folder, bpm=118.0, bpm_confidence=0.7)
+        meta.correct(bpm=124.0)
+        DerivedMetadata.objects.filter(pk=meta.pk).update(bpm=119.0, bpm_confidence=0.9)
+        meta.refresh_from_db()
+        meta.sync_estimate_tags()
+        tags = tag_rows(meta.sample)
+        self.assertEqual(set(tags), {"124bpm"})
+        self.assertEqual(tags["124bpm"].source, TagSource.USER)
+
+    def test_correct_view_owner_only(self):
+        """TC-ANA-055: the correction endpoint is a 404 for non-owners,
+        matching retry_analysis."""
+        meta = analysed_meta(self.folder, bpm=118.0, bpm_confidence=0.7)
+        client = Client()
+        client.force_login(self.stranger)
         response = client.post(
-            reverse("analysis:retry_analysis", args=[sample.pk])
+            reverse("analysis:correct_metadata", args=[meta.sample.pk]), {"bpm": "90"}
         )
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(set(tag_rows(meta.sample)), {"118bpm"})

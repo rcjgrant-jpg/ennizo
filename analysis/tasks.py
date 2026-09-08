@@ -38,7 +38,7 @@ def analyse_sample(self, sample_id):
         # analysis.signals), but only the Celery worker ever runs the
         # pipeline. Deferring the import keeps librosa and Essentia — several
         # hundred MB resident — out of the web process entirely.
-        from .pipeline import analyse
+        from .pipeline import analyse, measured_tag_names
 
         # The pipeline needs a real file on disk. local_copy gives us one
         # whether the audio lives in local media/ or in an S3-style bucket.
@@ -53,7 +53,19 @@ def analyse_sample(self, sample_id):
             meta.error_message = ""
             meta.save()
 
-            _write_derived_tags(sample, result)
+            # Container facts are measurements: written accepted.
+            for name in measured_tag_names(result):
+                tag, _ = Tag.objects.get_or_create(
+                    name=name, defaults={"kind": Tag.Kind.OBJECTIVE}
+                )
+                SampleTag.objects.get_or_create(
+                    sample=sample, tag=tag,
+                    defaults={"source": TagSource.DERIVED, "status": TagStatus.ACCEPTED},
+                )
+
+            # Tempo and key are estimates: the metadata row owns those tags,
+            # which also means a re-analysis never overrides an owner's correction.
+            meta.sync_estimate_tags()
 
     except Exception as exc:
         logger.exception("Analysis failed for sample %s", sample_id)
@@ -64,31 +76,3 @@ def analyse_sample(self, sample_id):
         return
 
     return {"sample_id": sample_id, "bpm": result["bpm"], "tonic": result["tonic"]}
-
-
-def _write_derived_tags(sample, result):
-    """Container facts are written ACCEPTED — they are measurements. Tempo and
-    key are written SUGGESTED, because they are algorithmic estimates and the
-    user is the authority on whether they are right."""
-    from .pipeline import estimated_tag_names, measured_tag_names
-
-    for name in measured_tag_names(result):
-        _write_tag(sample, name, TagStatus.ACCEPTED, None)
-
-    for name, confidence in estimated_tag_names(result):
-        _write_tag(sample, name, TagStatus.SUGGESTED, round(float(confidence), 3))
-
-
-def _write_tag(sample, name, status, confidence):
-    tag, _ = Tag.objects.get_or_create(
-        name=name.lower(), defaults={"kind": Tag.Kind.OBJECTIVE}
-    )
-    SampleTag.objects.get_or_create(
-        sample=sample,
-        tag=tag,
-        defaults={
-            "source": TagSource.DERIVED,
-            "status": status,
-            "confidence": confidence,
-        },
-    )

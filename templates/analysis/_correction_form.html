@@ -1,0 +1,54 @@
+{% if is_owner %}
+<details class="mt-3" {% if correction_error %}open{% endif %}>
+  <summary class="cursor-pointer select-none text-xs text-white/50 hover:text-white/80">
+    {% if metadata.is_corrected %}Corrected by you — edit{% else %}Wrong tempo or key? Correct it{% endif %}
+  </summary>
+
+  <form hx-post="{% url 'analysis:correct_metadata' sample.pk %}"
+        hx-target="#analysis-state"
+        hx-swap="outerHTML"
+        class="mt-3 grid grid-cols-3 gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+    {% csrf_token %}
+
+    <label class="text-xs text-white/50">
+      Tempo (BPM)
+      <input type="number" name="bpm" step="0.1" min="20" max="400"
+             value="{{ metadata.bpm_override|default_if_none:'' }}"
+             placeholder="{{ metadata.bpm|floatformat:1 }}"
+             class="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white">
+    </label>
+
+    <label class="text-xs text-white/50">
+      Key
+      <select name="tonic" class="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white">
+        <option value="">—</option>
+        {% for name in pitch_classes %}
+          <option value="{{ forloop.counter0 }}"
+            {% if metadata.tonic_override == forloop.counter0 %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="text-xs text-white/50">
+      Mode
+      <select name="mode" class="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white">
+        <option value="">—</option>
+        <option value="major" {% if metadata.mode_override == "major" %}selected{% endif %}>Major</option>
+        <option value="minor" {% if metadata.mode_override == "minor" %}selected{% endif %}>Minor</option>
+      </select>
+    </label>
+
+    {% if correction_error %}
+      <p class="col-span-3 text-xs text-red-300">{{ correction_error }}</p>
+    {% endif %}
+
+    <p class="col-span-2 self-center text-xs text-white/40">
+      Leave a field blank to keep the measured value. Tempo and key tags update to match.
+    </p>
+    <button type="submit"
+            class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium hover:bg-violet-500">
+      Save
+    </button>
+  </form>
+</details>
+{% endif %}

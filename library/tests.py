@@ -139,7 +139,7 @@ class TagQuerySetTests(BaseLibraryTest):
         link = SampleTag.objects.create(
             sample=sample,
             tag=tag,
-            source=TagSource.PREDICTED,
+            source=TagSource.DERIVED,
             status=TagStatus.SUGGESTED,
         )
         self.assertNotIn(sample, Sample.objects.tagged("breakbeat"))
@@ -153,14 +153,13 @@ class TagQuerySetTests(BaseLibraryTest):
         sample = make_sample(self.alice_folder)
         tag = Tag.objects.create(name="lo-fi", kind=Tag.Kind.SUBJECTIVE)
         link = SampleTag.objects.create(
-            sample=sample, tag=tag, source=TagSource.PREDICTED
+            sample=sample, tag=tag, source=TagSource.DERIVED
         )
         link.reject()
         self.assertNotIn(sample, Sample.objects.tagged("lo-fi"))
         # Provenance survives the rejection.
         link.refresh_from_db()
-        self.assertEqual(link.source, TagSource.PREDICTED)
-        self.assertIsNotNone(link.resolved_at)
+        self.assertEqual(link.source, TagSource.DERIVED)
 
 
 class SampleLifecycleTests(BaseLibraryTest):
@@ -393,7 +392,7 @@ class DraftTagViewTests(BaseLibraryTest):
         link = SampleTag.objects.create(
             sample=self.sample,
             tag=tag,
-            source=TagSource.PREDICTED,
+            source=TagSource.DERIVED,
             status=TagStatus.SUGGESTED,
         )
         self.client.post(self.url, {"action": "keep", "tag_pk": str(link.pk)})
@@ -405,6 +404,32 @@ class DraftTagViewTests(BaseLibraryTest):
         self.client.force_login(self.bob)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 404)
+
+    def test_objective_tags_do_not_count_toward_cap(self):
+        """TC-LIB-074 (U2.3): the cap is on *descriptive* tags. Measured and
+        estimate tags — 'loop', 'mono', '120bpm' — are objective and must
+        not eat the user's ten."""
+        for name in ("loop", "mono", "120bpm", "c-minor"):
+            tag = Tag.objects.create(name=name, kind=Tag.Kind.OBJECTIVE)
+            SampleTag.objects.create(
+                sample=self.sample, tag=tag, source=TagSource.DERIVED
+            )
+        for i in range(9):
+            tag = Tag.objects.create(name=f"tag{i}", kind=Tag.Kind.SUBJECTIVE)
+            SampleTag.objects.create(
+                sample=self.sample, tag=tag, source=TagSource.USER
+            )
+        self.client.post(self.url, {"action": "add", "tag_name": "tenth"})
+        self.assertTrue(
+            SampleTag.objects.filter(sample=self.sample, tag__name="tenth").exists()
+        )
+
+    def test_estimate_shaped_names_refused(self):
+        """TC-LIB-075 (S4, U1.5): tempo and key are set through the
+        correction control, not typed as tags — one way to rule on them."""
+        for name in ("124bpm", "c-minor", "bflat"):
+            self.client.post(self.url, {"action": "add", "tag_name": name})
+        self.assertFalse(SampleTag.objects.filter(sample=self.sample).exists())
 
 
 class UploadFormTests(BaseLibraryTest):
