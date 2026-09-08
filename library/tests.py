@@ -83,7 +83,7 @@ class BaseLibraryTest(TestCase):
 
 class SampleVisibilityTests(BaseLibraryTest):
     """TC-LIB-001..004 — visibility queryset (U2.7 private-by-default,
-    U8.3 account boundaries)."""
+    U8.2 account boundaries)."""
 
     def test_private_sample_hidden_from_other_users(self):
         """TC-LIB-001 (U2.7): a non-public sample is invisible to others."""
@@ -100,17 +100,6 @@ class SampleVisibilityTests(BaseLibraryTest):
         """TC-LIB-003 (U2.7): marking public shares the sample."""
         sample = make_sample(self.alice_folder, public=True)
         self.assertIn(sample, Sample.objects.visible_to(self.bob))
-
-    def test_anonymous_viewer_sees_only_public(self):
-        """TC-LIB-004 (U8.2): unauthenticated visitors see public samples
-        only."""
-        from django.contrib.auth.models import AnonymousUser
-
-        private = make_sample(self.alice_folder, public=False)
-        public = make_sample(self.alice_folder, title="Snare", public=True)
-        visible = Sample.objects.visible_to(AnonymousUser())
-        self.assertIn(public, visible)
-        self.assertNotIn(private, visible)
 
 
 class MetadataFilterTests(BaseLibraryTest):
@@ -292,7 +281,7 @@ class FolderViewTests(BaseLibraryTest):
         self.assertNotIn(hidden, samples)
 
     def test_folder_samples_denies_other_users(self):
-        """TC-LIB-052 (U8.3): another user's folder is a 404, not a 403 —
+        """TC-LIB-052 (U8.2): another user's folder is a 404, not a 403 —
         its existence is not confirmed."""
         client = Client()
         client.force_login(self.bob)

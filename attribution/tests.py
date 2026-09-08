@@ -140,7 +140,7 @@ class DownloadEligibilityTests(BaseAttributionTest):
         self.assertEqual(response.status_code, 404)
 
     def test_anonymous_download_requires_login(self):
-        """TC-ATT-005 (U8.3): downloading requires an account — anonymous
+        """TC-ATT-005 (U8.2): downloading requires an account — anonymous
         requests are redirected to login."""
         sample = make_sample(self.folder, public=True)
         response = Client().get(

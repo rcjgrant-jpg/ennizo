@@ -70,7 +70,7 @@ class BaseProcessingTest(TestCase):
 
 
 class AccessControlTests(BaseProcessingTest):
-    """TC-PRO-001..004 — the editor is owner-only (U8.3; finding F5)."""
+    """TC-PRO-001..004 — the editor is owner-only (U8.2; finding F5)."""
 
     def test_edit_page_denied_for_non_owner(self):
         """TC-PRO-001: another user's sample cannot be opened in the

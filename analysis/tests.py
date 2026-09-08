@@ -206,15 +206,6 @@ class AnalysisViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_public_sample_analysis_visible_anonymously(self):
-        """TC-ANA-041 (U8.2): a public sample's analysis page renders for
-        an anonymous visitor."""
-        sample = make_sample(self.folder, public=True)
-        response = Client().get(
-            reverse("analysis:sample_analysis", args=[sample.pk])
-        )
-        self.assertEqual(response.status_code, 200)
-
     def test_page_view_renews_lease_on_uncommitted_sample(self):
         """TC-ANA-042: opening the analysis page touches last_active_at on
         an uncommitted sample, keeping the reaper at bay."""
