@@ -19,7 +19,7 @@
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-medium">{{ sample.title }}</p>
         <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-          {% if sample.derived_bpm %}<span>{{ sample.derived_bpm }} BPM</span>{% endif %}
+          {% if sample.metadata.has_tempo %}<span>{{ sample.metadata.bpm_display }} BPM</span>{% endif %}
           {% for st in sample.accepted_tags %}
             <span class="bg-muted rounded-full px-2 py-0.5">{{ st.tag.name }}</span>
           {% endfor %}

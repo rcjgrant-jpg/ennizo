@@ -4,6 +4,7 @@ from pathlib import Path
 from django import forms
 from django.db.models import Q
 
+from library.forms import ALLOWED_SUFFIXES
 from library.models import Folder, Sample
 
 from .models import Comment, Post
@@ -24,9 +25,8 @@ class DraftForm(forms.Form):
         f = self.cleaned_data.get("audio_file")
         if not f:
             return None
-        ext = Path(f.name).suffix.lower()
-        if ext not in {".wav", ".mp3", ".aiff", ".flac"}:
-            raise forms.ValidationError("Upload a WAV, MP3, AIFF or FLAC file.")
+        if Path(f.name).suffix.lower() not in ALLOWED_SUFFIXES:
+            raise forms.ValidationError("Upload a WAV, MP3, AIF or FLAC file.")
         if f.size > 100 * 1024 * 1024:
             raise forms.ValidationError("That file is too large (100MB maximum).")
         return f
@@ -67,8 +67,6 @@ class PublishForm(forms.ModelForm):
     writes them onto post.sample; a ModelForm over two models would be more
     machinery than two selects deserve.
     """
-    tags = forms.CharField(required=False)
-
     _SELECT_CLASS = (
         "bg-muted border-border w-full rounded-md border px-3 py-2 text-xs outline-none"
     )

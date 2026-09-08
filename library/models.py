@@ -10,7 +10,6 @@ from django.utils import timezone
 from datetime import timedelta
 
 
-
 AUDIO_EXTENSIONS = ["wav", "aiff", "aif", "aifc", "flac", "mp3"]
 
 
@@ -51,12 +50,7 @@ class SampleQuerySet(models.QuerySet):
         )
 
     def committed(self):
-        
         return self.filter(is_committed=True)
-
-    def with_metadata(self):
-        return self.select_related("metadata")
-
 
     def in_key(self, tonic, mode=None):
         qs = self.annotate(
@@ -79,15 +73,6 @@ class SampleQuerySet(models.QuerySet):
             sample_tags__status=TagStatus.ACCEPTED,
         ).distinct()
 
-    def analysed(self):
-        return self.filter(metadata__status="complete")
-
-    def pending_analysis(self):
-        """LEFT JOIN so samples with no metadata row are included."""
-        return self.filter(
-            Q(metadata__isnull=True) | Q(metadata__status__in=["pending", "failed"])
-        )
-        
     def discard(self):
         """Delete uncommitted samples in bulk: audio files and any draft
         posts go with them (see Sample.delete, the single teardown path).
@@ -147,10 +132,8 @@ class Tag(models.Model):
 
 class TagSource(models.TextChoices):
     """Where the tag came from — a provenance record, never overwritten."""
-    DERIVED = "derived", "Derived"        # deterministic pipeline (bpm, key)
-    PREDICTED = "predicted", "Predicted"  # ML classifier output
-    USER = "user", "User"
-    IMPORTED = "imported", "Imported"
+    DERIVED = "derived", "Derived"   # the analysis pipeline (measurements and estimates)
+    USER = "user", "User"            # typed or corrected by the owner
 
 
 class TagStatus(models.TextChoices):
@@ -170,7 +153,6 @@ class SampleTag(models.Model):
         max_length=20, choices=TagStatus.choices, default=TagStatus.ACCEPTED
     )
     confidence = models.FloatField(null=True, blank=True)
-    resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -186,17 +168,11 @@ class SampleTag(models.Model):
 
     def accept(self):
         self.status = TagStatus.ACCEPTED
-        self.resolved_at = timezone.now()
-        self.save(update_fields=["status", "resolved_at"])
+        self.save(update_fields=["status"])
 
     def reject(self):
         self.status = TagStatus.REJECTED
-        self.resolved_at = timezone.now()
-        self.save(update_fields=["status", "resolved_at"])
-
-    @property
-    def is_machine_generated(self):
-        return self.source in (TagSource.DERIVED, TagSource.PREDICTED)
+        self.save(update_fields=["status"])
 
 
 class Sample(models.Model):
@@ -309,21 +285,16 @@ class Sample(models.Model):
         return [st for st in self.sample_tags.all()
                 if st.status == TagStatus.SUGGESTED]
 
-    def derived_bpm(self):
-        meta = getattr(self, "metadata", None)
-        if meta is None or not meta.is_analysed:
-            return None
-        return meta.effective_bpm
-    
     def delete(self, *args, **kwargs):
         """The single teardown path for a sample.
 
         Every deletion route — the analysis-page discard button, the library
-        delete, the reaper, the composer's supersede — ends here, so file
-        cleanup and draft teardown are written once.
+        delete, the reaper, the composer's supersede — ends here, so draft
+        teardown is written once.
         """
         post = getattr(self, "post", None)
         if post is not None and not post.is_published:
             post.delete()
-        self.audio_file.delete(save=False)
+        # The audio file itself is removed by library.signals.delete_sample_file,
+        # which also fires for cascade deletions that bypass this method.
         return super().delete(*args, **kwargs)

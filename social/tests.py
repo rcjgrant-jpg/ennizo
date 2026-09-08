@@ -136,11 +136,11 @@ class PublishFlowTests(BaseSocialTest):
         refused = Tag.objects.create(name="noise", kind=Tag.Kind.SUBJECTIVE)
         keep = SampleTag.objects.create(
             sample=sample, tag=pending,
-            source=TagSource.PREDICTED, status=TagStatus.SUGGESTED,
+            source=TagSource.DERIVED, status=TagStatus.SUGGESTED,
         )
         rejected = SampleTag.objects.create(
             sample=sample, tag=refused,
-            source=TagSource.PREDICTED, status=TagStatus.REJECTED,
+            source=TagSource.DERIVED, status=TagStatus.REJECTED,
         )
         self.client.force_login(self.author)
         self.client.post(
