@@ -22,40 +22,38 @@ EQ_Q = 1.0
 # Ai used to assist with helper function implementation
 
 def apply_tame_peaks(y: np.ndarray, sr: int,
-                     threshold_db: float = -1.0,
-                     ratio: float = 20.0,
+                     threshold_db: float = -4.0,
+                     ratio: float = 6.0,
                      release_db_per_s: float = 60.0) -> np.ndarray:
-    """Attenuate transients above the threshold; audio below it is
-    untouched. Expects float audio, shape (n,) mono or (n, channels);
-    returns the same shape and dtype.
-
-    Feed-forward peak compressor, implemented directly in numpy. Attack is
-    instantaneous (at 20:1 the 0.5 ms attack of the previous pedalboard
-    implementation was already effectively a limiter); release is linear in
-    dB at ``release_db_per_s``, so a typical few-dB over recovers within
-    about 100 ms. Every channel receives the same gain, keyed to the loudest
-    channel, so the stereo image is not disturbed. No makeup gain.
-
-    The release is computed without a sample-by-sample loop: a linear-in-dB
-    decay from every past peak is the running maximum of
-    ``reduction[j] - k * (n - j)``, which rearranges to a cumulative max of
-    ``reduction + k * index`` minus ``k * index``.
-    """
+  
+    # 64-bit floats so the log and power maths below don't 
+    # lose precision, and bail out on empty audio
+    
     x = np.asarray(y, dtype=np.float64)
     if x.size == 0:
         return y
+    
+    # loudness of each sample in the audio file, in dBFS. 
+    # For stereo audio, we take the maximum of the two channels.
 
     level = np.abs(x) if x.ndim == 1 else np.max(np.abs(x), axis=1)
     with np.errstate(divide="ignore"):          # log10(0) for silence -> -inf
         level_db = 20.0 * np.log10(level)
+        
+    # Compute the amount of gain reduction to apply to each sample, in dB.
 
     over_db = np.maximum(level_db - threshold_db, 0.0)
     reduction_db = over_db * (1.0 - 1.0 / ratio)
+    
+    # Compute a smoothed gain reduction curve that reduces naturally according to DB/second 
 
     k = release_db_per_s / sr                    # dB recovered per sample
     idx = np.arange(len(reduction_db), dtype=np.float64)
     smoothed_db = np.maximum.accumulate(reduction_db + k * idx) - k * idx
 
+    # Convert the smoothed gain reduction from dB to a linear gain factor,
+    # and apply it to the audio samples.
+    
     gain = 10.0 ** (-smoothed_db / 20.0)
     if x.ndim == 2:
         gain = gain[:, None]
