@@ -18,6 +18,9 @@
 
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-medium">{{ sample.title }}</p>
+        {% if sample.note %}
+          <p class="text-muted-foreground truncate text-xs italic" title="{{ sample.note }}">{{ sample.note }}</p>
+        {% endif %}
         <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
           {% if sample.metadata.has_tempo %}<span>{{ sample.metadata.bpm_display }} BPM</span>{% endif %}
           {% for st in sample.accepted_tags %}
