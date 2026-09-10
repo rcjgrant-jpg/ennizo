@@ -123,4 +123,6 @@ def measured_tag_names(result):
         names.append("loop")
     if result.get("channels") == 1:
         names.append("mono")
+    elif result.get("channels") == 2:
+        names.append("stereo")
     return names
