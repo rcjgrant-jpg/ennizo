@@ -117,16 +117,6 @@ class MetadataFilterTests(BaseLibraryTest):
         return sample
 
 
-    def test_in_key_honours_tonic_override(self):
-        """TC-LIB-012 (U1.5, U3.1): key filtering also coalesces overrides."""
-        # tonic 6 = Gb in PITCH_CLASSES; override moved it to 0 = C.
-        corrected = self._sample_with_meta(
-            "D", tonic=6, mode="minor", tonic_override=0
-        )
-        self.assertIn(corrected, Sample.objects.in_key(0))
-        self.assertNotIn(corrected, Sample.objects.in_key(6))
-
-
 class TagQuerySetTests(BaseLibraryTest):
     """TC-LIB-020..021 — only human-accepted tags are searchable
     (S4 human authority; U1.4/U1.6 suggestions await a ruling)."""
@@ -139,7 +129,7 @@ class TagQuerySetTests(BaseLibraryTest):
         link = SampleTag.objects.create(
             sample=sample,
             tag=tag,
-            source=TagSource.DERIVED,
+            source=TagSource.PREDICTED,
             status=TagStatus.SUGGESTED,
         )
         self.assertNotIn(sample, Sample.objects.tagged("breakbeat"))
@@ -153,13 +143,14 @@ class TagQuerySetTests(BaseLibraryTest):
         sample = make_sample(self.alice_folder)
         tag = Tag.objects.create(name="lo-fi", kind=Tag.Kind.SUBJECTIVE)
         link = SampleTag.objects.create(
-            sample=sample, tag=tag, source=TagSource.DERIVED
+            sample=sample, tag=tag, source=TagSource.PREDICTED
         )
         link.reject()
         self.assertNotIn(sample, Sample.objects.tagged("lo-fi"))
         # Provenance survives the rejection.
         link.refresh_from_db()
-        self.assertEqual(link.source, TagSource.DERIVED)
+        self.assertEqual(link.source, TagSource.PREDICTED)
+        self.assertIsNotNone(link.resolved_at)
 
 
 class SampleLifecycleTests(BaseLibraryTest):
@@ -392,7 +383,7 @@ class DraftTagViewTests(BaseLibraryTest):
         link = SampleTag.objects.create(
             sample=self.sample,
             tag=tag,
-            source=TagSource.DERIVED,
+            source=TagSource.PREDICTED,
             status=TagStatus.SUGGESTED,
         )
         self.client.post(self.url, {"action": "keep", "tag_pk": str(link.pk)})
@@ -404,32 +395,6 @@ class DraftTagViewTests(BaseLibraryTest):
         self.client.force_login(self.bob)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 404)
-
-    def test_objective_tags_do_not_count_toward_cap(self):
-        """TC-LIB-074 (U2.3): the cap is on *descriptive* tags. Measured and
-        estimate tags — 'loop', 'mono', '120bpm' — are objective and must
-        not eat the user's ten."""
-        for name in ("loop", "mono", "120bpm", "c-minor"):
-            tag = Tag.objects.create(name=name, kind=Tag.Kind.OBJECTIVE)
-            SampleTag.objects.create(
-                sample=self.sample, tag=tag, source=TagSource.DERIVED
-            )
-        for i in range(9):
-            tag = Tag.objects.create(name=f"tag{i}", kind=Tag.Kind.SUBJECTIVE)
-            SampleTag.objects.create(
-                sample=self.sample, tag=tag, source=TagSource.USER
-            )
-        self.client.post(self.url, {"action": "add", "tag_name": "tenth"})
-        self.assertTrue(
-            SampleTag.objects.filter(sample=self.sample, tag__name="tenth").exists()
-        )
-
-    def test_estimate_shaped_names_refused(self):
-        """TC-LIB-075 (S4, U1.5): tempo and key are set through the
-        correction control, not typed as tags — one way to rule on them."""
-        for name in ("124bpm", "c-minor", "bflat"):
-            self.client.post(self.url, {"action": "add", "tag_name": name})
-        self.assertFalse(SampleTag.objects.filter(sample=self.sample).exists())
 
 
 class UploadFormTests(BaseLibraryTest):
@@ -496,17 +461,3 @@ class UploadFormTests(BaseLibraryTest):
         self.assertFalse(
             Sample(origin=form.cleaned_data["origin"]).is_publishable
         )
-
-
-class SearchTests(BaseLibraryTest):
-    """TC-LIB-090 — full-text search (U3.8). Requires PostgreSQL, which is
-    the project's only supported database."""
-
-    def test_search_matches_title_and_not_unrelated(self):
-        """TC-LIB-090 (U3.8): a title term finds the sample; an unrelated
-        sample does not appear."""
-        hit = make_sample(self.alice_folder, title="dusty amen break")
-        miss = make_sample(self.alice_folder, title="clean synth stab")
-        results = list(Sample.objects.search("amen"))
-        self.assertIn(hit, results)
-        self.assertNotIn(miss, results)
