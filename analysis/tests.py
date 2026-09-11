@@ -150,7 +150,7 @@ class TagNamingTests(TestCase):
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA)
 class MetadataModelTests(TestCase):
-    """TC-ANA-020..026 — DerivedMetadata semantics (U1.5 overrides,
+    """TC-ANA-020..023 — DerivedMetadata semantics (U1.5 overrides,
     U3.3/U3.4 audition helpers)."""
 
     @classmethod
@@ -212,7 +212,7 @@ class AnalysisWiringTests(TestCase):
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA)
 class AnalysisViewTests(TestCase):
-    """TC-ANA-040..044 — visibility and the activity lease
+    """TC-ANA-040..043 — visibility and the activity lease
     (U2.7; register: lease touched by page views, never by polls)."""
 
     @classmethod

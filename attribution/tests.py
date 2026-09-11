@@ -62,7 +62,7 @@ class BaseAttributionTest(TestCase):
 
 
 class DownloadEligibilityTests(BaseAttributionTest):
-    """TC-ATT-001..005 — who may fetch a sample (U2.7 private-by-default,
+    """TC-ATT-001..007 — who may fetch a sample (U2.7 private-by-default,
     U4.1 WAV download, register: eligibility = owner OR public OR posted)."""
 
     def test_private_sample_not_downloadable_by_others(self):

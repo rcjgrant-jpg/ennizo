@@ -80,10 +80,10 @@ class BaseSocialTest(TestCase):
 
 
 class FeedVisibilityTests(BaseSocialTest):
-    """TC-SOC-001..002 — drafts stay private to their author."""
+    """TC-SOC-001..002 — drafts stay private to their author (U2.7)."""
 
     def test_feed_shows_published_posts_only(self):
-        """TC-SOC-001: a draft post never appears in another user's feed."""
+        """TC-SOC-001 (U2.7): a draft post never appears in another user's feed."""
         published = make_published_post(self.author, self.folder, "Pub")
         draft_sample = make_sample(self.folder, title="Draft")
         Post.objects.create(author=self.author, sample=draft_sample)
@@ -93,7 +93,7 @@ class FeedVisibilityTests(BaseSocialTest):
         self.assertEqual(len(posts), 1)
 
     def test_visible_to_includes_own_drafts(self):
-        """TC-SOC-002: the queryset shows an author their own drafts."""
+        """TC-SOC-002 (U2.7): the queryset shows an author their own drafts."""
         sample = make_sample(self.folder)
         draft = Post.objects.create(author=self.author, sample=sample)
         self.assertIn(draft, Post.objects.visible_to(self.author))
@@ -101,7 +101,7 @@ class FeedVisibilityTests(BaseSocialTest):
 
 
 class PublishFlowTests(BaseSocialTest):
-    """TC-SOC-010..012 — publishing commits the sample and settles tags
+    """TC-SOC-010..015 — publishing commits the sample and settles tags
     (S4; register: publish accepts unruled suggestions; provisional state
     lives on the sample)."""
 
@@ -243,7 +243,7 @@ class DeletePostTests(BaseSocialTest):
     """TC-SOC-030..031 — deleting a post never deletes audio."""
 
     def test_delete_post_leaves_sample(self):
-        """TC-SOC-030: removing a published post keeps the sample in the
+        """TC-SOC-030 (U7.2): removing a published post keeps the sample in the
         library — posts present samples, they don't own them."""
         post = make_published_post(self.author, self.folder)
         sample_pk = post.sample_id

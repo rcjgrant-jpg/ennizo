@@ -119,7 +119,7 @@ class MetadataFilterTests(BaseLibraryTest):
 
 class TagQuerySetTests(BaseLibraryTest):
     """TC-LIB-020..021 — only human-accepted tags are searchable
-    (S4 human authority; U1.4/U1.6 suggestions await a ruling)."""
+    (S4 human authority; U1.4 suggestions await a rulingƒ)."""
 
     def test_suggested_tags_are_not_searchable(self):
         """TC-LIB-020 (S4): a machine suggestion must not surface the sample
@@ -347,7 +347,7 @@ class SampleActionViewTests(BaseLibraryTest):
 
 
 class DraftTagViewTests(BaseLibraryTest):
-    """TC-LIB-070..073 — the tag review panel (U2.2 subjective tags,
+    """TC-LIB-070..073 — the tag review panel (U2.1 tag provenance, 
     U2.3 tag cap, S4 accept/reject)."""
 
     def setUp(self):
@@ -357,7 +357,7 @@ class DraftTagViewTests(BaseLibraryTest):
         self.url = reverse("library:draft_tags", args=[self.sample.pk])
 
     def test_add_creates_accepted_user_tag(self):
-        """TC-LIB-070 (U2.2): a typed tag is stored lowercased, sourced to
+        """TC-LIB-070 (U2.1): a typed tag is stored lowercased, sourced to
         the user, and immediately accepted."""
         self.client.post(self.url, {"action": "add", "tag_name": "  DUSTY  "})
         link = SampleTag.objects.get(sample=self.sample)
@@ -378,7 +378,7 @@ class DraftTagViewTests(BaseLibraryTest):
         )
 
     def test_keep_accepts_a_suggestion(self):
-        """TC-LIB-072 (S4, U1.6): 'keep' promotes a machine suggestion."""
+        """TC-LIB-072 (S4, U1.4): 'keep' promotes a machine suggestion."""
         tag = Tag.objects.create(name="vinyl", kind=Tag.Kind.SUBJECTIVE)
         link = SampleTag.objects.create(
             sample=self.sample,
@@ -398,7 +398,7 @@ class DraftTagViewTests(BaseLibraryTest):
 
 
 class UploadFormTests(BaseLibraryTest):
-    """TC-LIB-080..083 — upload validation (U1.8 formats, U2.3 tag cap)."""
+    """TC-LIB-080..085 — upload validation (U4.1 WAV format, U2.3 tag cap, U5.1/U5.2 declarations)."""
 
     def _form(self, filename="loop.wav", tags="", title="",
               origin="self_recorded", licence="cc_by"):
@@ -418,7 +418,7 @@ class UploadFormTests(BaseLibraryTest):
         )
 
     def test_disallowed_extension_rejected(self):
-        """TC-LIB-080 (U1.8): non-audio uploads are refused at the form."""
+        """TC-LIB-081 (U1.8): a WAV passes validation."""
         form = self._form(filename="malware.exe")
         self.assertFalse(form.is_valid())
         self.assertIn("audio_file", form.errors)
